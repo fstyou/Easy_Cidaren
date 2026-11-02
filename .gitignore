@@ -65,4 +65,4 @@ ENV/
 
 # Runtime files
 *.log
-get token/fetch_token/token.txt
+runtime/

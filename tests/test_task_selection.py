@@ -1,0 +1,41 @@
+import unittest
+from datetime import datetime
+
+from easy_cidaren.core.task_selection import batch_tasks, task_times, unavailable_reason
+
+
+class TaskSelectionTests(unittest.TestCase):
+    def test_task_times_use_start_plus_duration_in_local_time(self):
+        start = 1793604627860
+        duration = 115172140
+        self.assertEqual(task_times({'start_time': start, 'over_time': duration}),
+                         (datetime.fromtimestamp(start / 1000).strftime('%Y-%m-%d %H:%M'),
+                          datetime.fromtimestamp((start + duration) / 1000).strftime('%Y-%m-%d %H:%M')))
+        self.assertEqual(task_times({}), ('—', '—'))
+        self.assertEqual(task_times({'start_time': -1, 'over_time': 2}), ('—', '—'))
+        self.assertEqual(task_times({'start_time': 10 ** 30, 'over_time': 1}), ('—', '—'))
+    
+    def test_not_yet_open_task_is_unavailable_for_both_types(self):
+        for is_test in (False, True):
+            self.assertIn('尚未开始', unavailable_reason(
+                    {'over_status': 1, 'progress': 0}, is_test = is_test))
+    
+    def test_open_task_with_zero_progress_is_available(self):
+        self.assertIsNone(unavailable_reason({'over_status': 2, 'progress': 0}))
+    
+    def test_completed_test_cannot_be_retried_but_learning_can(self):
+        task = {'over_status': 2, 'progress': 100}
+        self.assertIn('已完成', unavailable_reason(task, is_test = True))
+        self.assertIsNone(unavailable_reason(task, is_test = False))
+    
+    def test_batch_skips_unopened_and_completed_tasks(self):
+        tasks = [
+            {'over_status': 1, 'progress': 0},
+            {'over_status': 2, 'progress': 0},
+            {'over_status': 2, 'progress': 100},
+        ]
+        self.assertEqual(batch_tasks(tasks), [tasks[1]])
+
+
+if __name__ == '__main__':
+    unittest.main( )
