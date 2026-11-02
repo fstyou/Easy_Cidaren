@@ -4,7 +4,13 @@ import time
 import json
 from urllib.parse import unquote
 
-from api.main_api import query_word, submit_result, next_exam
+# from api.main_api import query_word, submit_result, next_exam
+from api.main_api import (
+    query_word,
+    submit_result,
+    next_exam,
+    CardDataError
+)
 from log.log import Log
 from publicInfo.publicInfo import PublicInfo
 from decryptencrypt.debase64 import debase64
@@ -256,7 +262,17 @@ def word_form_mean(public_info: PublicInfo) -> int:
             # 单词转原型
             word = word_revert(word)
     # 请求单词释义
-    query_word(public_info, word)
+    # query_word(public_info, word)
+    try:
+        query_word(public_info, word)
+    except CardDataError:
+        query_answer.logger.error(
+            f"无法加载单词卡片，尝试跳过当前题目："
+            f"word={word!r}, "
+            f"course_id={public_info.course_id}, "
+            f"list_id={public_info.now_unit}"
+        )
+        return None
     # 提取释义
     handle_query_word_mean(public_info)
     query_answer.logger.info('选择意思')

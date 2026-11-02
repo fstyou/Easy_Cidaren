@@ -18,6 +18,9 @@ basic_url = 'https://app.vocabgo.com/student/api/Student/'
 
 file_logger = get_file_logger('_main_api')
 
+class CardDataError(Exception):
+    """服务端卡片数据异常"""
+    pass
 
 class SecurityVerifyError(Exception):
     """服务端风控: 11003 需安全验证(要求用户在 App/微信端完成验证), 重试无意义, 应立即停止并提示"""
@@ -32,6 +35,11 @@ def handle_response(response):
     """
     response_json = response.json()
     code = response_json['code']
+    if code == 120:
+        api.logger.error(
+            f"卡片数据异常(code=120): {response.text}"
+        )
+        raise CardDataError("当前单词卡片数据异常")
     # error_view.showUI()
     if code == 11003:
         api.logger.error(f"需安全验证: {response.text}")
@@ -255,6 +263,7 @@ def check_is_self_built(func):
 def query_word(public_info, word):
     time.sleep(random.randint(0, 2))
     api.logger.info(f"查询单词{word}")
+    '''
     # query word in the unit
     url = f'Course/StudyWordInfo?course_id={public_info.course_id}&list_id={public_info.now_unit}&word={word}&timestamp={create_timestamp()}&version=2.6.1.231204&app_type=1'
     word = check_jv_and_retry_get(requests.rqs_session.get, basic_url + url)
@@ -262,6 +271,34 @@ def query_word(public_info, word):
     handle_response(word)
     # decrypt  response
     public_info.word_query_result = debase64(word.json()['data'], word.json()['jv'])
+    '''
+    url = basic_url + 'Course/StudyWordInfo'
+    params = {
+       'course_id': public_info.course_id,
+       'list_id': public_info.now_unit,
+       'word': word,
+       'timestamp': create_timestamp(),
+       'version': '2.6.1.231204',
+       'app_type': 1
+    }
+    api.logger.info(
+       f'卡片查询参数: '
+       f'course_id={public_info.course_id}, '
+       f'list_id={public_info.now_unit}, '
+       f'word={word!r}, '
+       f'in_word_list={word in public_info.word_list}, '
+       f'is_self_built={public_info.is_self_built}'
+    )
+    response = check_jv_and_retry_get(
+       requests.rqs_session.get,
+       url,
+       params=params
+    )
+    handle_response(response)
+    public_info.word_query_result = debase64(
+       response.json()['data'],
+       response.json()['jv']
+    )
     api.logger.info("查询单词成功")
 
 

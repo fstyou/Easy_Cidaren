@@ -5,13 +5,13 @@ Token 捕获后端服务
 import os
 import sys
 import socket
-import shutil
 import subprocess
 import threading
 import time
 import importlib.util
 from pathlib import Path
 from log.log import Log
+from util.executables import find_mitmdump
 
 service_logger = Log("token_capture_service").logger
 
@@ -59,7 +59,8 @@ class TokenCaptureService:
             self.proxy_manager = ProxyManager()
             
             # 检查 mitmdump 是否可用
-            if not shutil.which("mitmdump"):
+            mitmdump = find_mitmdump()
+            if not mitmdump:
                 raise RuntimeError("mitmdump 未找到，请先安装 mitmproxy: pip install mitmproxy")
             
             # 检查 8888 端口是否被占用
@@ -83,7 +84,10 @@ class TokenCaptureService:
             service_logger.info("正在启用系统代理 127.0.0.1:8888")
             self.proxy_manager.enable_proxy(host="127.0.0.1", port=8888)
             if status_callback:
-                status_callback("系统代理已配置")
+                if sys.platform.startswith("linux"):
+                    status_callback("请在目标客户端手动设置 HTTP/HTTPS 代理为 127.0.0.1:8888，结束后恢复原设置。")
+                else:
+                    status_callback("系统代理已配置")
             
             # 启动 mitmdump
             if status_callback:
@@ -97,7 +101,7 @@ class TokenCaptureService:
             addon_path = os.path.join(self.fetch_token_path, "addon.py")
             self.mitm_process = subprocess.Popen(
                 [
-                    "mitmdump",
+                    mitmdump,
                     "-s", addon_path,
                     "--listen-port", "8888",
                     "--quiet",
@@ -202,6 +206,8 @@ class TokenCaptureService:
                 service_logger.error(f"导入 mitmproxy 证书失败: {e}")
         elif sys.platform != "win32":
             service_logger.info("非 Windows 系统，请手动信任 mitmproxy 证书")
+            if status_callback:
+                status_callback(f"请在目标客户端信任 mitmproxy 证书：{cert_path}")
     
     def cleanup(self, status_callback=None):
         """清理资源（线程安全，可重复调用，只执行一次）"""

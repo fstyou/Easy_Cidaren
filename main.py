@@ -95,6 +95,9 @@ class TaskWorker(QThread):
         self._is_running = False
 
     def complete_test(self, task_info: dict):
+        public_info.is_self_built = False
+        public_info.get_book_words_data = []
+        public_info.all_unit_name = []
         task_name = task_info['task_name']
         public_info.course_id = task_info['course_id']
         main.logger.info(f'开始执行任务：{task_name}')
@@ -251,7 +254,7 @@ class TaskWorker(QThread):
 if __name__ == '__main__':
     main = Log("main")
     main.logger.info("初始化主页面")
-    path = os.path.dirname(__file__)
+    path = os.path.dirname(os.path.abspath(__file__))
     main.logger.info("初始化公共组件")
     public_info = PublicInfo(path)
     main.logger.info(f"当前版本号：{public_info.version}")
@@ -282,9 +285,10 @@ if __name__ == '__main__':
 
         def on_version_checked(latest_version):
             if public_info.version < latest_version and public_info.know_version < latest_version:
-                import view.update
-                update = view.update.Ui_Form(public_info)
-                update.exec()
+                pass
+                # import view.update
+                # update = view.update.Ui_Form(public_info)
+                # update.exec()
 
 
         update_thread.version_ready.connect(on_version_checked)

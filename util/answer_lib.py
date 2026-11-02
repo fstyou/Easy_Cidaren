@@ -12,7 +12,7 @@ _lib = None
 
 
 def _lib_path():
-    return os.path.join(os.getcwd(), 'config', LIB_FILE)
+    return os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'config', LIB_FILE)
 
 
 def load_lib(force=False):

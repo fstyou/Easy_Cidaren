@@ -183,16 +183,19 @@ class ProxyManager:
             # 保存当前代理设置
             for service in services:
                 self.original_settings[service] = self._get_proxy_info(service)
+            if not services or any(value is None for value in self.original_settings.values()):
+                self.original_settings.clear()
+                raise RuntimeError("无法读取 macOS 网络代理设置，请检查 networksetup 权限")
 
             # 设置新代理
             for service in services:
                 subprocess.run(
                     ["networksetup", "-setwebproxy", service, host, str(port)],
-                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True
                 )
                 subprocess.run(
                     ["networksetup", "-setsecurewebproxy", service, host, str(port)],
-                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True
                 )
 
         elif self.os == "Windows":
@@ -201,28 +204,23 @@ class ProxyManager:
 
             # 保存当前代理设置
             self.original_settings['windows'] = self._get_windows_proxy_settings()
+            if self.original_settings['windows'] is None:
+                self.original_settings.clear()
+                raise RuntimeError("无法读取 Windows 代理设置")
 
             # 设置新代理
             proxy_server = f"{host}:{port}"
-            self._set_windows_proxy_settings(
+            if not self._set_windows_proxy_settings(
                 enabled=True,
                 server=proxy_server,
                 override="<local>"
-            )
+            ):
+                raise RuntimeError("无法设置 Windows 系统代理")
             proxy_logger.logger.info(f"已设置系统代理: {proxy_server}")
 
         elif self.os == "Linux":
-            # 保存当前环境变量
-            self.original_settings['linux_env'] = self._get_linux_proxy_env()
-
-            # 设置新的代理环境变量
-            proxy_url = f"http://{host}:{port}"
-            os.environ['http_proxy'] = proxy_url
-            os.environ['https_proxy'] = proxy_url
-            os.environ['HTTP_PROXY'] = proxy_url
-            os.environ['HTTPS_PROXY'] = proxy_url
-
-            proxy_logger.logger.info(f"已设置代理环境变量: {proxy_url}")
+            # 进程环境变量不会影响已经运行的微信或其他客户端。
+            proxy_logger.logger.info(f"请在目标客户端手动设置代理 {host}:{port}")
 
     def disable_proxy(self):
         proxy_logger.logger.info("恢复原代理设置...")

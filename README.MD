@@ -124,52 +124,36 @@
 
 ## 快速上手
 
-### 直接使用软件
+### 从源码运行（Windows、macOS、Linux）
 
-1. 前往[release](https://github.com/ularch/Easy_Cidaren/releases/latest)下载最新版压缩包
-2. 解压后双击Easy_Cidaren.exe运行程序
-3. 获取 token (两种方法任选其一):
+使用 Python 3.12 和图形桌面环境，在项目根目录创建虚拟环境并安装依赖。已有的虚拟环境不能在不同操作系统或 CPU 架构之间直接复制，应在目标机器上重新创建。项目目录及 `config`、`log` 和 `get token/fetch_token` 目录需要可写。
 
-**方法一：使用内置 token 获取工具（推荐）**
-- **现在使用可能会提示您的时钟快了，请自行百度抓包**
-- 在弹出的图形界面中点击 `帮助`->`获取token`打开token获取软件（软件来源网络，侵权请联系）**全程不要关闭黑色cmd窗口**
-- 将 `词达人token获取.exe`软件置于后台，打开电脑端微信，登录并进入微信公众号 `词达人`->`学生端`，随便点击几个页面
-- 返回 `词达人token获取.exe`，复制软件中显示的内容（token）
-  `<br>`词达人更新后，软件获取到的内容中第一行为词达人token，
-  `新版本已修复，可直复制进脚本，若出错可手动复制尝试`
-  ![img.png](assets/img.png)
-- 返回图形界面，将token粘贴进 `用户token`栏，点击登录
-- 使用期间除获取token外，任何设备**不要登录词达人**，否则会刷新token
+Windows（PowerShell）：
 
-**方法二：命令行获取（macOS用户可选择这个）**
+```powershell
+py -3.12 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe main.py
+```
+
+macOS / Linux（终端）：
 
 ```bash
-   cd "get token/fetch_token"
-   python main.py
+python3.12 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
+.venv/bin/python main.py
 ```
 
-- 将链接[https://app.vocabgo.com/student/]()复制到任意微信聊天框中并发送
-- 点击链接以使用微信浏览器打开
-- Token 会保存在 `./get token/fetch_token/token.txt` 文件中，手动粘贴到输入框
+Linux 需要桌面会话、Qt 所需的系统图形库及音频服务；具体系统包名称取决于发行版。依赖使用的预编译包也取决于 Python 版本、CPU 架构和系统。首次安装后可使用同一条启动命令再次运行。Windows 原有 `.bat` 脚本仍可使用，但上述虚拟环境方式更容易管理依赖。
 
-### 本地python运行
+### 获取 token
 
-#### 首次使用
+可在主界面选择“帮助 → 获取 token → 内置”，或将已获得的 token 手动输入。也可以用虚拟环境中的 Python 直接运行 `get token/fetch_token/main.py`；它会持续运行，按 Ctrl+C 结束。
 
-1. 安装[python3.12](https://www.python.org/downloads/release/python-3123/)
-2. 前往[release](https://github.com/ularch/Easy_Cidaren/releases/latest)下载最新版压缩包
-3. 解压下载到的最新版压缩包
-4. 双击运行程序文件夹中的 `点我配置环境.bat`运行`<br>`或手动运行
-
-```
-pip install -r requirements.txt
-```
-
-#### 后续使用
-
-1. 双击运行 `点我运行.exe`弹出cmd页面
-2. 运行过程中全程不要关闭cmd（黑色页面）
-3. 后续与使用软件相同
+- Windows 和 macOS：内置工具尝试设置系统 HTTP/HTTPS 代理并在结束时恢复；系统可能要求授权。Windows 还会尝试将 mitmproxy 证书导入当前用户证书库。
+- Linux：请在目标客户端手动设置 HTTP 和 HTTPS 代理为 `127.0.0.1:8888`，结束后恢复原设置。客户端必须支持并实际使用该代理。
+- macOS 和 Linux：首次启动 mitmproxy 后，根据目标客户端的证书信任方式，手动信任 `~/.mitmproxy/mitmproxy-ca-cert.cer`。证书信任和代理设置是否生效取决于客户端；如无法抓取，请手动输入 token。
+- 捕获期间端口 8888 必须可用。程序正常结束后会停止代理进程；系统异常退出时需检查并手动恢复代理设置。第三方 `.exe` 工具仅适用于 Windows，且需要自行提供。
 
 ## 支持项目
 **[请我喝杯奶茶☕️](https://afdian.com/a/ularch)**

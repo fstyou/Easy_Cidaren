@@ -1,9 +1,16 @@
 import os
 import subprocess
 import sys
+from pathlib import Path
+
+# 直接运行子目录脚本时，确保能导入项目根目录下的公共模块。
+SCRIPT_DIR = Path(__file__).resolve().parent
+PROJECT_ROOT = SCRIPT_DIR.parent.parent
+sys.path.insert(0, str(PROJECT_ROOT))
+
 from proxy_manager import ProxyManager
-import shutil
 from log.log import Log
+from util.executables import find_mitmdump
 
 # init log
 main_logger = Log("fetch_token_main")
@@ -13,13 +20,17 @@ main_logger.logger.info("")
 
 try:
     main_logger.logger.info("正在自动配置代理...")
+    # 检查 mitmdump 是否可用
+    mitmdump = find_mitmdump()
+    if not mitmdump:
+        raise RuntimeError("mitmdump 未找到，请先安装 mitmproxy: pip install mitmproxy")
     proxy.enable_proxy()
+    if sys.platform.startswith("linux"):
+        main_logger.logger.info("请在目标客户端手动设置 HTTP/HTTPS 代理为 127.0.0.1:8888，结束后恢复原设置。")
+    if sys.platform != "win32":
+        main_logger.logger.info("请在目标客户端手动信任 ~/.mitmproxy/mitmproxy-ca-cert.cer。")
 
     main_logger.logger.info("启动 mitmproxy...")
-
-    # 检查 mitmdump 是否可用
-    if not shutil.which("mitmdump"):
-        raise RuntimeError("mitmdump 未找到，请先安装 mitmproxy: pip install mitmproxy")
 
     # 在 Windows 上隐藏子进程窗口和错误输出
     startupinfo = None
@@ -29,8 +40,8 @@ try:
 
     mitm = subprocess.Popen(
         [
-            "mitmdump",
-            "-s", "addon.py",
+            mitmdump,
+            "-s", str(SCRIPT_DIR / "addon.py"),
             "--listen-port", "8888",
             "--quiet",
             "--set", "console_eventlog_verbosity=error"
@@ -46,7 +57,12 @@ try:
     try:
         mitm.wait()
     except KeyboardInterrupt:
-        pass
+        mitm.terminate()
+        try:
+            mitm.wait(timeout=3)
+        except subprocess.TimeoutExpired:
+            mitm.kill()
+            mitm.wait()
 
 except KeyboardInterrupt:
     main_logger.logger.warning("用户中断")

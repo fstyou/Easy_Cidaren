@@ -1,12 +1,10 @@
 import os
 import subprocess
-import threading
+import sys
 import time
 
-import winsound
-from playsound import playsound
-
 from PyQt6.QtGui import QAction, QIcon
+from PyQt6.QtMultimedia import QSoundEffect
 from PyQt6 import QtCore, QtGui, QtWidgets
 from PyQt6.QtWidgets import QMainWindow, QApplication, QMessageBox
 
@@ -577,8 +575,7 @@ class UiMainWindow(QMainWindow):
             return
         self.set_ui_enabled(True)
         self.progress_bar.setValue(self.progress_bar.maximum())
-        music_thread = threading.Thread(target=self.play_music)
-        music_thread.start()
+        self.play_music()
         QtWidgets.QMessageBox.information(self, "任务完成！", message)
         task_name = self.public_info.class_task[0]['task_name']
         self.update_output_info(f"{task_name}运行完成")
@@ -605,8 +602,7 @@ class UiMainWindow(QMainWindow):
         self.progress_skip_label.setText("")
         self.main_logger.info(summary)
         self.update_output_info(summary)
-        music_thread = threading.Thread(target=self.play_music)
-        music_thread.start()
+        self.play_music()
         QtWidgets.QMessageBox.information(self, "一键刷题完成", summary)
         # 等服务端进度落库后再刷新
         time.sleep(1)
@@ -700,29 +696,31 @@ class UiMainWindow(QMainWindow):
             if os.path.exists(self.public_info.music_path):
                 music_path = self.public_info.music_path
             else:
-                music_path = self.root_path + "/assets/music.wav"
+                music_path = os.path.join(self.root_path, "assets", "music.wav")
                 self.main_logger.error("自定义音乐文件不存在，使用默认音乐")
         else:
-            music_path = self.root_path + "/assets/music.wav"
+            music_path = os.path.join(self.root_path, "assets", "music.wav")
         try:
-            playsound(music_path)
+            self._sound_effect = QSoundEffect(self)
+            self._sound_effect.setSource(QtCore.QUrl.fromLocalFile(os.path.abspath(music_path)))
+            self._sound_effect.play()
         except Exception as e:
-            self.main_logger.info(f"playsound播放失败，使用winsound播放: {e}")
-            try:
-                winsound.PlaySound(music_path, winsound.SND_FILENAME)
-            except Exception as e2:
-                self.main_logger.info(f"winsound播放失败: {e2}")
+            self.main_logger.warning(f"播放提示音失败: {e}")
 
     def get_token(self):
         """
         打开获取 token 界面
         :return:
         """
-        exe_path = self.root_path + "\\get token\\词达人token获取.exe"
+        if sys.platform != "win32":
+            QMessageBox.information(self, "获取 token", "第三方工具仅支持 Windows，请使用内置工具或手动输入 token。")
+            return
+        exe_path = os.path.join(self.root_path, "get token", "词达人token获取.exe")
         try:
-            subprocess.Popen([exe_path], shell=True)
-        except:
-            self.main_logger.info("词达人token获取.exe打开失败")
+            subprocess.Popen([exe_path])
+        except OSError as e:
+            self.main_logger.warning(f"第三方 token 工具打开失败: {e}")
+            QMessageBox.warning(self, "获取 token", "第三方工具不可用，请使用内置工具或手动输入 token。")
 
     def open_builtin_token_dialog(self):
         """
