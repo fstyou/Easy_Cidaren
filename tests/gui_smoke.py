@@ -108,7 +108,8 @@ def inspect_about(dialog):
     assert '项目首页' not in buttons
     labels = [label.text( ) for label in dialog.findChildren(QLabel)]
     assert 'GNU GPL v3' in labels
-    assert dialog.minimumWidth( ) == dialog.maximumWidth( ) == 400
+    assert dialog.minimumWidth( ) == dialog.maximumWidth( )
+    assert dialog.minimumWidth( ) >= 400
     assert dialog.minimumHeight( ) == dialog.maximumHeight( )
     project_link = dialog.findChild(QLabel, 'projectLink')
     assert 'https://github.com/fstyou/Easy_Cidaren' in project_link.text( )

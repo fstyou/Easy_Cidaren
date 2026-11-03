@@ -56,7 +56,7 @@ class AboutDialog(QtWidgets.QDialog):
         confirm.clicked.connect(self.accept)
         buttons.addWidget(confirm)
         layout.addLayout(buttons)
-        width = 400
+        width = max(400, layout.sizeHint( ).width( ), layout.minimumSize( ).width( ))
         self.setFixedWidth(width)
         height = layout.totalHeightForWidth(width) if layout.hasHeightForWidth( ) else layout.sizeHint( ).height( )
         self.setFixedHeight(max(height, layout.minimumSize( ).height( )))
