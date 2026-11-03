@@ -90,12 +90,15 @@ with patch.object(window, 'public_info', settings_state):
     window.settings.save( )
     assert saved_settings[0][:4] == (1, 3, 2, 10)
     assert not window.settings.isVisible( )
+print('界面测试：设置完成', flush = True)
 with patch('easy_cidaren.ui.log_export.export_logs') as export_logs:
     window.ui.export_logs_button.click( )
     export_logs.assert_called_once_with(window)
+print('界面测试：日志导出入口完成', flush = True)
 with patch('easy_cidaren.ui.main_window.QtGui.QDesktopServices.openUrl', return_value = True) as open_url:
     window.ui.help_button.click( )
     assert open_url.call_args.args[0].toString( ) == 'https://github.com/fstyou/Easy_Cidaren#readme'
+print('界面测试：帮助入口完成', flush = True)
 def inspect_about(dialog):
     dialog.show( )
     app.processEvents( )
@@ -118,8 +121,19 @@ def inspect_about(dialog):
     dialog.close( )
     return 0
 
-with patch.object(AboutDialog, 'exec', new = inspect_about):
+about_errors = []
+def inspect_about_safely(dialog):
+    try:
+        return inspect_about(dialog)
+    except Exception as exc:
+        about_errors.append(exc)
+        return 0
+
+with patch.object(AboutDialog, 'exec', new = inspect_about_safely):
     window.ui.about_button.click( )
+if about_errors:
+    raise about_errors[0]
+print('界面测试：关于窗口内容完成', flush = True)
 original_about_exec = AboutDialog.exec
 def close_about(dialog):
     QTimer.singleShot(0, dialog.close)
