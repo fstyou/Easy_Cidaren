@@ -36,14 +36,17 @@ class PublicInfoTests(unittest.TestCase):
                     info = module.PublicInfo( )
                     self.assertEqual(info.word_dict, {'含义': 'word'})
                     self.assertEqual((info.min_time, info.max_time), (1, 3))
+                    self.assertEqual(info.theme, 'system')
                     with patch.object(module, 'write_json', side_effect = OSError('failed')):
                         with self.assertRaises(OSError):
                             info.input_info(5, 6, 7, 8, False, 'gzip', False, '')
                     self.assertEqual((info.min_time, info.max_time), (1, 3))
-                    info.input_info(3, 5, 6, 9, False, 'gzip, deflate', False, '提示音.wav')
+                    info.input_info(3, 5, 6, 9, False, 'gzip, deflate', False, '提示音.wav', 'dark')
                 saved = json.loads(config_path.read_text(encoding = 'utf-8'))
                 self.assertEqual(saved['min_time'], 3)
                 self.assertEqual(saved['music_path'], '提示音.wav')
+                self.assertEqual(saved['theme'], 'dark')
+                self.assertEqual(info.theme, 'dark')
                 self.assertEqual(saved['custom_field'], '保留')
                 self.assertFalse(info.play_music)
     

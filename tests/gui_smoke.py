@@ -8,7 +8,9 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from PyQt6.QtCore import Qt, QTimer
-from PyQt6.QtWidgets import QApplication, QFileDialog, QLabel, QMessageBox, QPushButton, QRadioButton, QAbstractItemView
+from PyQt6.QtGui import QColor, QPalette
+from PyQt6.QtWidgets import QApplication, QFileDialog, QLabel, QMessageBox, QPushButton, QRadioButton, \
+    QAbstractItemView, QWidget
 
 ROOT = Path(__file__).resolve( ).parents[1]
 sys.path.insert(0, str(ROOT))
@@ -18,15 +20,30 @@ from easy_cidaren.ui.token_dialog import CaptureProgressDialog
 from easy_cidaren.ui.dialogs import confirm_action, create_message, select_file
 from easy_cidaren.ui.settings import SettingsWindow
 from easy_cidaren.ui.about import AboutDialog
-from easy_cidaren.token_capture.service import TokenCaptureService
+from easy_cidaren.token_capture.service import CaptureStatus, TokenCaptureService
+from easy_cidaren.ui.theme import ThemeManager
 
 app = QApplication([])
+app._theme_manager = ThemeManager(app, 'light')
 assert callable(application_entry)
 message = create_message(None, '提示', '测试内容', QMessageBox.Icon.Information)
 assert message.button(QMessageBox.StandardButton.Ok).text( ) == '知道了'
 assert message.escapeButton( ) == message.button(QMessageBox.StandardButton.Ok)
 
+dark_parent = QWidget( )
+dark_palette = QPalette(dark_parent.palette( ))
+dark_palette.setColor(QPalette.ColorRole.Window, QColor('#202020'))
+dark_palette.setColor(QPalette.ColorRole.WindowText, QColor('#ffffff'))
+dark_palette.setColor(QPalette.ColorRole.Base, QColor('#202020'))
+dark_palette.setColor(QPalette.ColorRole.Text, QColor('#ffffff'))
+dark_parent.setPalette(dark_palette)
+for icon in (QMessageBox.Icon.Information, QMessageBox.Icon.Warning, QMessageBox.Icon.Critical):
+    dark_message = create_message(dark_parent, '提示', '测试内容', icon)
+    assert dark_message.palette( ).color(QPalette.ColorRole.Window).name( ) == '#f4f6f9'
+    assert dark_message.palette( ).color(QPalette.ColorRole.WindowText).name( ) == '#263548'
+
 def reject_confirmation(dialog):
+    assert dialog.palette( ).color(QPalette.ColorRole.Window).name( ) == '#f4f6f9'
     assert dialog.button(QMessageBox.StandardButton.Yes).text( ) == '中止任务'
     assert dialog.button(QMessageBox.StandardButton.No).text( ) == '取消'
     assert dialog.defaultButton( ) == dialog.button(QMessageBox.StandardButton.No)
@@ -45,12 +62,41 @@ with patch.object(QMessageBox, 'exec', new = close_confirmation):
     assert not confirm_action(None, '确认开始', '确定开始吗？', confirm_text = '开始', default_confirm = True)
 
 def cancel_file_dialog(dialog):
-    assert dialog.labelText(QFileDialog.DialogLabel.Accept) == '保存'
+    assert dialog.palette( ).color(QPalette.ColorRole.Base).lightness( ) > 200
+    assert dialog.palette( ).color(QPalette.ColorRole.Text).name( ) == '#263548'
+    assert dialog.labelText(QFileDialog.DialogLabel.Accept) == (
+        '保存' if dialog.acceptMode( ) == QFileDialog.AcceptMode.AcceptSave else '打开')
     assert dialog.labelText(QFileDialog.DialogLabel.Reject) == '取消'
     return QFileDialog.DialogCode.Rejected
 
 with patch.object(QFileDialog, 'exec', new = cancel_file_dialog):
-    assert select_file(None, '导出日志', '', '日志文件 (*.log)', save = True) == ''
+    assert select_file(dark_parent, '导出日志', '', '日志文件 (*.log)', save = True) == ''
+    assert select_file(dark_parent, '选择音频', '', '音频文件 (*.wav)') == ''
+
+app._theme_manager.set_mode('dark')
+assert app._theme_manager.dark
+dark_message = create_message(dark_parent, '提示', '深色测试', QMessageBox.Icon.Warning)
+dark_message.show( )
+app.processEvents( )
+assert dark_message.palette( ).color(QPalette.ColorRole.Window).lightness( ) < 100
+assert dark_message.palette( ).color(QPalette.ColorRole.WindowText).lightness( ) > 180
+dark_message.close( )
+def check_dark_file_dialog(dialog):
+    dialog.show( )
+    app.processEvents( )
+    assert dialog.palette( ).color(QPalette.ColorRole.Window).lightness( ) < 100
+    assert dialog.palette( ).color(QPalette.ColorRole.Text).lightness( ) > 180
+    dialog.close( )
+    return QFileDialog.DialogCode.Rejected
+
+with patch.object(QFileDialog, 'exec', new = check_dark_file_dialog):
+    assert select_file(dark_parent, '打开', '', '所有文件 (*)') == ''
+app._theme_manager.set_mode('system')
+scheme = app.styleHints( ).colorScheme( )
+if scheme != Qt.ColorScheme.Unknown:
+    assert app._theme_manager.dark == (scheme == Qt.ColorScheme.Dark)
+app._theme_manager.set_mode('light')
+assert not app._theme_manager.dark
 
 with patch('easy_cidaren.ui.main_window.load_token', return_value = 'remembered-token'):
     remembered = UiMainWindow(SimpleNamespace(version = 'test'), logging.getLogger('gui-test'), None)
@@ -87,9 +133,13 @@ with patch.object(window, 'public_info', settings_state):
         warning.assert_called_once( )
         assert not saved_settings
     window.settings.min_time.setValue(1)
+    window.settings.theme_choice.setCurrentIndex(window.settings.theme_choice.findData('dark'))
     window.settings.save( )
     assert saved_settings[0][:4] == (1, 3, 2, 10)
+    assert saved_settings[0][-1] == 'dark'
+    assert app._theme_manager.dark
     assert not window.settings.isVisible( )
+app._theme_manager.set_mode('light')
 print('界面测试：设置完成', flush = True)
 with patch('easy_cidaren.ui.log_export.export_logs') as export_logs:
     window.ui.export_logs_button.click( )
@@ -372,7 +422,7 @@ dialog.open( )
 app.processEvents( )
 assert dialog.isVisible( )
 assert any('微信' in label.text( ) for label in dialog.findChildren(type(dialog.status_label)))
-dialog.show_status('在目标客户端手动设置 HTTP/HTTPS 代理为 127.0.0.1:8888，结束后恢复原设置')
+dialog.show_status(CaptureStatus.MANUAL_PROXY, '代理设置说明：127.0.0.1:8888')
 with tempfile.TemporaryDirectory( ) as directory:
     cert = Path(directory) / '.mitmproxy' / 'mitmproxy-ca-cert.cer'
     cert.parent.mkdir( )
@@ -392,8 +442,13 @@ assert '127.0.0.1:8888' in steps
 assert cert_path in steps
 assert steps.index('127.0.0.1:8888') < steps.index(cert_path) < steps.index('公众号')
 assert not hasattr(dialog, 'details')
-dialog.show_status('请在微信中打开词达人学生端，等待获取 token。')
+dialog.show_status(CaptureStatus.WAITING, '任意等待提示')
 assert '等待获取' in dialog.status_label.text( )
+window._capture_warnings = []
+window.on_capture_status(CaptureStatus.RESTORE_PROXY, '自定义恢复提示')
+window.on_capture_status(CaptureStatus.WARNING, '自定义错误提示')
+assert window._capture_warnings == ['自定义恢复提示', '自定义错误提示']
+window._capture_warnings = []
 dialog.captured( )
 dialog.finish(success = True)
 assert not dialog.isVisible( )

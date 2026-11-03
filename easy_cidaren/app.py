@@ -7,6 +7,7 @@ from easy_cidaren.app_logging.config import Log
 from easy_cidaren.core.public_info import PublicInfo
 from easy_cidaren.ui.main_window import UiMainWindow
 from easy_cidaren.ui.task_worker import TaskWorker
+from easy_cidaren.ui.theme import ThemeManager
 
 
 def main( ):
@@ -15,6 +16,7 @@ def main( ):
     app = QApplication(sys.argv)
     try:
         public_info = PublicInfo( )
+        app._theme_manager = ThemeManager(app, public_info.theme)
         logger.info(f"当前版本号：{public_info.version}")
         window = UiMainWindow(public_info, logger, TaskWorker)
         window.show( )

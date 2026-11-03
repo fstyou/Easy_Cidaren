@@ -5,6 +5,7 @@ import subprocess
 import sys
 import threading
 import time
+from enum import Enum, auto
 from pathlib import Path
 
 from easy_cidaren.app_logging.config import Log
@@ -13,8 +14,12 @@ from easy_cidaren.token_capture.token_store import SAVED_TOKEN_FILE
 from easy_cidaren.utils.executables import find_mitmdump
 
 service_logger = Log("token_capture_service").logger
-MANUAL_PROXY_PREFIX = '在目标客户端手动设置'
-CERT_TRUST_PREFIX = '在客户端信任 mitmproxy 证书：'
+class CaptureStatus(Enum):
+    MANUAL_PROXY = auto( )
+    CERT_TRUST = auto( )
+    WAITING = auto( )
+    RESTORE_PROXY = auto( )
+    WARNING = auto( )
 
 
 class TokenCaptureService:
@@ -40,7 +45,7 @@ class TokenCaptureService:
         开始捕获 token（同步方法，会阻塞直到捕获成功或出错）
         
         Args:
-            status_callback: 状态更新回调函数 callback(message)
+            status_callback: 状态更新回调函数 callback(status, message)
             token_callback: token 捕获成功回调函数 callback(token)
             error_callback: 错误回调函数 callback(error_message)
             
@@ -81,7 +86,8 @@ class TokenCaptureService:
                 return None
             if status_callback:
                 if sys.platform.startswith("linux"):
-                    status_callback(f"{MANUAL_PROXY_PREFIX} HTTP/HTTPS 代理为 127.0.0.1:8888，结束后恢复原设置")
+                    status_callback(CaptureStatus.MANUAL_PROXY,
+                                    "在目标客户端手动设置 HTTP/HTTPS 代理为 127.0.0.1:8888，结束后恢复原设置")
             
             # 启动 mitmdump
             startupinfo = None
@@ -115,7 +121,7 @@ class TokenCaptureService:
                 return None
             
             if status_callback:
-                status_callback("请在微信中打开词达人学生端，等待获取 token")
+                status_callback(CaptureStatus.WAITING, "请在微信中打开词达人学生端，等待获取 token")
             
             # 只处理本次捕获更新的文件
             while True:
@@ -200,7 +206,7 @@ class TokenCaptureService:
         elif sys.platform != "win32":
             service_logger.info("非 Windows 系统，请手动信任 mitmproxy 证书")
             if status_callback:
-                status_callback(f"{CERT_TRUST_PREFIX}{cert_path}")
+                status_callback(CaptureStatus.CERT_TRUST, f"在客户端信任 mitmproxy 证书：{cert_path}")
     
     def cleanup(self, status_callback = None):
         """清理资源（线程安全，可重复调用，只执行一次）"""
@@ -226,7 +232,7 @@ class TokenCaptureService:
         except Exception as e:
             service_logger.error(f"停止 mitmproxy 失败: {e}")
             if status_callback:
-                status_callback("⛔ 无法停止 token 代理进程，请检查并手动关闭")
+                status_callback(CaptureStatus.WARNING, "无法停止 token 代理进程，请检查并手动关闭")
         
         try:
             if self.proxy_manager:
@@ -235,11 +241,11 @@ class TokenCaptureService:
                 service_logger.info("系统代理已恢复")
                 if status_callback:
                     if sys.platform.startswith('linux'):
-                        status_callback("请恢复刚刚手动设置的代理")
+                        status_callback(CaptureStatus.RESTORE_PROXY, "请恢复刚刚手动设置的代理")
         except Exception as e:
             service_logger.error(f"恢复系统代理失败: {e}")
             if status_callback:
-                status_callback("⛔ 代理设置恢复失败，请检查系统代理设置")
+                status_callback(CaptureStatus.WARNING, "代理设置恢复失败，请检查系统代理设置")
     
     def stop(self):
         """停止捕获"""

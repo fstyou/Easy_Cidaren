@@ -22,6 +22,17 @@ class FakeLog:
 
 
 class PlatformCompatibilityTests(unittest.TestCase):
+    def test_linux_capture_cleanup_emits_typed_restore_notice(self):
+        from easy_cidaren.token_capture.service import CaptureStatus, TokenCaptureService
+        service = TokenCaptureService('unused')
+        service.proxy_manager = Mock( )
+        callback = Mock( )
+        with patch('easy_cidaren.token_capture.service.sys.platform', 'linux'):
+            service.cleanup(callback)
+        callback.assert_called_once( )
+        self.assertIs(callback.call_args.args[0], CaptureStatus.RESTORE_PROXY)
+        self.assertTrue(callback.call_args.args[1])
+
     def test_certificate_startup_failure_is_reported(self):
         from easy_cidaren.token_capture.service import TokenCaptureService
         with tempfile.TemporaryDirectory( ) as directory:

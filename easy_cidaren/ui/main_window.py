@@ -8,12 +8,14 @@ from easy_cidaren.api.login import verify_token
 from easy_cidaren.core.public_info import PublicInfo
 from easy_cidaren.core.task_selection import batch_tasks, load_class_tasks, task_times, unavailable_reason
 from easy_cidaren.paths import ASSETS_DIR, CAPTURE_DATA_DIR
+from easy_cidaren.token_capture.service import CaptureStatus
 from easy_cidaren.token_capture.token_store import load_token
 from easy_cidaren.ui.about import AboutDialog
 from easy_cidaren.ui.dialogs import confirm_action, create_message, show_error, show_information, show_warning
 from easy_cidaren.ui.main_layout import MainWindowUi
 from easy_cidaren.ui.request_worker import RequestWorker
 from easy_cidaren.ui.settings import SettingsWindow
+from easy_cidaren.ui.theme import manager
 
 
 class UiMainWindow(QMainWindow):
@@ -313,9 +315,9 @@ class UiMainWindow(QMainWindow):
                 cell = QtWidgets.QTableWidgetItem(text)
                 cell.setData(QtCore.Qt.ItemDataRole.UserRole, task)
                 if progress >= 100:
-                    cell.setForeground(QtGui.QColor("#196b4b"))
+                    cell.setForeground(QtGui.QColor("#79d6a7" if manager( ) and manager( ).dark else "#196b4b"))
                 elif reason:
-                    cell.setForeground(QtGui.QColor("#65758a"))
+                    cell.setForeground(QtGui.QColor("#a8b9cc" if manager( ) and manager( ).dark else "#65758a"))
                 if reason:
                     cell.setToolTip(reason)
                     cell.setFlags(cell.flags( ) & ~QtCore.Qt.ItemFlag.ItemIsSelectable)
@@ -594,10 +596,10 @@ class UiMainWindow(QMainWindow):
         self.capture_dialog.open( )
         self.capture_worker.start( )
     
-    def on_capture_status(self, message):
+    def on_capture_status(self, status, message):
         if self.capture_dialog:
-            self.capture_dialog.show_status(message)
-        if message.startswith(('⛔', '请恢复目标客户端')):
+            self.capture_dialog.show_status(status, message)
+        if status in (CaptureStatus.WARNING, CaptureStatus.RESTORE_PROXY):
             self._capture_warnings.append(message)
     
     def _on_capture_dialog_closed(self):

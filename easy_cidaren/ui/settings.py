@@ -6,6 +6,7 @@ from easy_cidaren.app_logging.config import Log
 from easy_cidaren.paths import ASSETS_DIR
 from easy_cidaren.ui.dialogs import select_file, show_error, show_warning
 from easy_cidaren.ui.styles import DIALOG_STYLE
+from easy_cidaren.ui.theme import manager
 
 
 class SettingsWindow(QtWidgets.QDialog):
@@ -54,6 +55,15 @@ class SettingsWindow(QtWidgets.QDialog):
         general = QtWidgets.QGroupBox('其他')
         general_layout = QtWidgets.QVBoxLayout(general)
         general_layout.setSpacing(10)
+        theme_row = QtWidgets.QHBoxLayout( )
+        theme_row.addWidget(QtWidgets.QLabel('外观'))
+        self.theme_choice = QtWidgets.QComboBox( )
+        for label, value in (('跟随系统', 'system'), ('浅色', 'light'), ('深色', 'dark')):
+            self.theme_choice.addItem(label, value)
+        self.theme_choice.setCurrentIndex(max(0, self.theme_choice.findData(getattr(public_info, 'theme', 'system'))))
+        theme_row.addWidget(self.theme_choice)
+        theme_row.addStretch( )
+        general_layout.addLayout(theme_row)
         self.br_checkBox = QtWidgets.QCheckBox('启用 Brotli 压缩（下次登录时生效）')
         self.br_checkBox.setChecked(public_info.br_choices)
         self.playMusicCheckBox = QtWidgets.QCheckBox('任务完成时播放提示音')
@@ -122,10 +132,13 @@ class SettingsWindow(QtWidgets.QDialog):
                     self.min_time_2.value( ), self.max_time_2.value( ), compressed,
                     'gzip, deflate, br' if compressed else 'gzip, deflate',
                     self.playMusicCheckBox.isChecked( ), self.musicPathLineEdit.text( ).strip( ),
+                    self.theme_choice.currentData( ),
             )
         except (OSError, ValueError, TypeError) as exc:
             Log('settings').logger.exception('保存设置失败')
             show_error(self, '保存失败', f'无法保存设置：{exc}')
             return
         Log('settings').logger.info('设置已保存')
+        if manager( ):
+            manager( ).set_mode(self.theme_choice.currentData( ))
         self.accept( )

@@ -5,7 +5,7 @@ from PyQt6.QtCore import QThread, pyqtSignal
 from PyQt6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton
 
 from easy_cidaren.app_logging.config import Log
-from easy_cidaren.token_capture.service import CERT_TRUST_PREFIX, MANUAL_PROXY_PREFIX, TokenCaptureService
+from easy_cidaren.token_capture.service import CaptureStatus, TokenCaptureService
 
 dialog_logger = Log("builtin_token").logger
 
@@ -13,7 +13,7 @@ dialog_logger = Log("builtin_token").logger
 class TokenCaptureWorker(QThread):
     """工作线程：负责在后台调用 Token 捕获服务"""
     token_captured = pyqtSignal(str)  # 捕获到 token 的信号
-    status_update = pyqtSignal(str)  # 状态更新信号
+    status_update = pyqtSignal(object, str)  # 状态类型与展示文案
     error_occurred = pyqtSignal(str)  # 错误信号
     
     def __init__(self, capture_directory):
@@ -150,18 +150,18 @@ class CaptureProgressDialog(QDialog):
                 f'<li style="margin-bottom: 8px;">{html.escape(step)}</li>' for step in steps
         ) + '</ol>')
     
-    def show_status(self, message):
-        if message.startswith("请在微信中打开"):
+    def show_status(self, status, message):
+        if status is CaptureStatus.WAITING:
             self.status_label.setText("等待获取 Token…")
-        elif message.startswith(MANUAL_PROXY_PREFIX):
+        elif status is CaptureStatus.MANUAL_PROXY:
             self._setup_steps[0] = message
             self._render_steps( )
             QtCore.QTimer.singleShot(0, self._fit_content)
-        elif message.startswith(CERT_TRUST_PREFIX):
+        elif status is CaptureStatus.CERT_TRUST:
             self._setup_steps[1] = message
             self._render_steps( )
             QtCore.QTimer.singleShot(0, self._fit_content)
-        elif message.startswith("⛔"):
+        elif status in (CaptureStatus.WARNING, CaptureStatus.RESTORE_PROXY):
             self.status_label.setText(message)
     
     def captured(self):

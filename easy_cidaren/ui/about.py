@@ -32,8 +32,7 @@ class AboutDialog(QtWidgets.QDialog):
         content.setFieldGrowthPolicy(QtWidgets.QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
         version_label = QtWidgets.QLabel(version)
         license_label = QtWidgets.QLabel('GNU GPL v3')
-        project_label = QtWidgets.QLabel(
-                f'<a href="{PROJECT_URL}" style="color: #3269bd;">{PROJECT_URL}</a>')
+        project_label = QtWidgets.QLabel(f'<a href="{PROJECT_URL}">{PROJECT_URL}</a>')
         project_label.setObjectName('projectLink')
         project_label.setTextFormat(QtCore.Qt.TextFormat.RichText)
         project_label.setTextInteractionFlags(QtCore.Qt.TextInteractionFlag(

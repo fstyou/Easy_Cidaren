@@ -15,6 +15,7 @@ DEFAULT_SETTINGS = {
     'accept_encoding': 'gzip, deflate, br',
     'play_music': False,
     'music_path': '',
+    'theme': 'system',
     'self_learn_lib': True,
     'self_learn_pool': True,
 }
@@ -43,6 +44,7 @@ class PublicInfo:
             self._headers_accept_encoding = user_config['accept_encoding']
             self._play_music = user_config['play_music']
             self._music_path = user_config['music_path']
+            self._theme = user_config.get('theme', 'system')
             # 自学习开关(独立控制两个记忆库的写入; 关闭只停写入, 读取不受影响)
             self._self_learn_lib = user_config['self_learn_lib']
             self._self_learn_pool = user_config['self_learn_pool']
@@ -139,6 +141,10 @@ class PublicInfo:
         return self._music_path
     
     @property
+    def theme(self) -> str:
+        return self._theme
+
+    @property
     def version(self) -> str:
         return __version__
     
@@ -158,12 +164,12 @@ class PublicInfo:
         write_json(RUNTIME_DIR / 'settings.json', data, indent = 2)
     
     def input_info(self, min_time, max_time, min_time_2, max_time_2, br_choices, accept_encoding, play_music,
-                   music_path):
+                   music_path, theme = 'system'):
         self._update_config({
             'min_time': min_time, 'max_time': max_time,
             'spend_min_time': min_time_2, 'spend_max_time': max_time_2,
             'br_choices': br_choices, 'accept_encoding': accept_encoding,
-            'play_music': play_music, 'music_path': music_path,
+            'play_music': play_music, 'music_path': music_path, 'theme': theme,
         })
         self._min_time = min_time
         self._max_time = max_time
@@ -173,3 +179,4 @@ class PublicInfo:
         self._headers_accept_encoding = accept_encoding
         self._play_music = play_music
         self._music_path = music_path
+        self._theme = theme
