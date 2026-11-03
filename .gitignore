@@ -66,3 +66,6 @@ ENV/
 # Runtime files
 *.log
 runtime/
+
+# Local agent instructions and working notes
+/agents/

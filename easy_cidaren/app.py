@@ -3,8 +3,8 @@ import sys
 
 from PyQt6.QtWidgets import QApplication
 
+from easy_cidaren.app_logging.config import Log
 from easy_cidaren.core.public_info import PublicInfo
-from easy_cidaren.logging.config import Log
 from easy_cidaren.ui.main_window import UiMainWindow
 from easy_cidaren.ui.task_worker import TaskWorker
 

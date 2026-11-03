@@ -16,7 +16,7 @@ class AnswerResultTests(unittest.TestCase):
                     phrase.reset_mock( )
                     word.reset_mock( )
                     info = SimpleNamespace(
-                            right_count = 0, wrong_count = 0, topic_code = 'old', _self_learn_lib = True,
+                            right_count = 0, wrong_count = 0, topic_code = 'old', self_learn_lib = True,
                             exam = {'topic_mode': mode, 'stem': {'remark': '含义'},
                                     'options': [{'content': 'first'}, {'content': 'second'}]},
                     )
@@ -27,7 +27,7 @@ class AnswerResultTests(unittest.TestCase):
                     (word if mode == 32 else phrase).assert_not_called( )
     
     def test_disabled_learning_still_records_progress(self):
-        info = SimpleNamespace(right_count = 0, wrong_count = 0, topic_code = 'old', _self_learn_lib = False,
+        info = SimpleNamespace(right_count = 0, wrong_count = 0, topic_code = 'old', self_learn_lib = False,
                                exam = {'topic_mode': 32, 'stem': {'remark': '含义'}})
         with patch('easy_cidaren.core.answer_result.add_answer') as add:
             record_answer_result(info, {'answer_result': 2, 'answer_corrects': ['answer'],

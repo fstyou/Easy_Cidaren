@@ -1,7 +1,9 @@
 import json
 
+from requests import exceptions
+
 import easy_cidaren.api.sessions as requests
-from easy_cidaren.logging.config import Log
+from easy_cidaren.app_logging.config import Log
 from easy_cidaren.utils.helpers import create_timestamp
 
 # 基础url
@@ -14,6 +16,7 @@ def verify_token(token):
     requests.set_token(token)
     timestamp = create_timestamp( )
     url = f'Student/Main?timestamp={timestamp}&version=2.6.1.231204&app_type=1'
+    response = None
     try:
         response = requests.rqs_session.get(basic_url + url, timeout = 15)
         login.logger.info(f"压缩编码格式：{response.headers.get('Content-Encoding')}")
@@ -26,22 +29,23 @@ def verify_token(token):
             return 1
         else:
             return result
-    except requests.exceptions.HTTPError as e:
+    except exceptions.HTTPError as e:
         login.logger.error(f"【HTTP请求错误】: {e}")
         return 2
-    except requests.exceptions.Timeout as e:
+    except exceptions.Timeout as e:
         login.logger.error(f"【连接超时，请检查网络连接】: {e}")
         return 3
     except json.JSONDecodeError as e:
         login.logger.error(f"【响应内容不是有效的JSON格式】: {e}")
-        login.logger.debug("响应内容：%s", response.text, extra = {'file_only': True})
+        if response is not None:
+            login.logger.debug("响应内容：%s", response.text, extra = {'file_only': True})
         return 4
-    except requests.exceptions.SSLError as e:
+    except exceptions.SSLError as e:
         login.logger.error(f"【SSL错误】：{e}")
         return 5
-    except requests.exceptions.ProxyError as e:
+    except exceptions.ProxyError as e:
         login.logger.error(f"【代理服务器异常】：{e}")
         return 6
-    except requests.exceptions.ConnectionError as e:
+    except exceptions.ConnectionError as e:
         login.logger.error(f"【连接错误】: {e}")
         return 7

@@ -1,4 +1,5 @@
-import importlib.util
+from tests.module_loader import load_module
+
 import logging
 import sys
 import types
@@ -33,16 +34,14 @@ class WorkerTests(unittest.TestCase):
             'easy_cidaren.api.response': types.SimpleNamespace(
                     SecurityVerifyError = type('SecurityVerifyError', (Exception,), {})),
             'easy_cidaren.core.answers': types.SimpleNamespace(answer = Mock( ), jump_read = Mock( ), submit = Mock( )),
-            'easy_cidaren.logging.config': types.SimpleNamespace(Log = lambda name: logger),
+            'easy_cidaren.app_logging.config': types.SimpleNamespace(Log = lambda name: logger),
             'easy_cidaren.security.decode': types.SimpleNamespace(debase64 = Mock( )),
             'easy_cidaren.core.word_list': types.SimpleNamespace(
                     extract_book_word = Mock( ), handle_word_result = Mock( ), query_word_unit = Mock( )),
         }
         path = Path(__file__).resolve( ).parents[1] / 'easy_cidaren' / 'ui' / 'task_worker.py'
         with patch.dict(sys.modules, modules):
-            spec = importlib.util.spec_from_file_location('test_task_worker_module', path)
-            module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(module)
+            module = load_module('test_task_worker_module', path)
             state = object( )
             worker = module.TaskWorker(state, [{'task_name': '测试任务'}], batch_mode = False)
             worker.stop( )
@@ -59,6 +58,25 @@ class WorkerTests(unittest.TestCase):
             worker.run( )
             self.assertEqual(worker.complete_test.call_count, 2)
             self.assertIn('成功 2 个', worker.batch_finished.messages[-1])
+
+            # A failed word-selection request must reach task retry handling.
+            state = types.SimpleNamespace(course_id = 'course', get_word_list_result = {}, word_list = ['word'])
+            worker = module.TaskWorker(state, [], batch_mode = False)
+            worker.start_answering = Mock( )
+            modules['easy_cidaren.api.tasks'].select_all_word.side_effect = RuntimeError('selection failed')
+            with self.assertRaisesRegex(RuntimeError, 'selection failed'):
+                worker.complete_practice('unit', 0, 1)
+            worker.start_answering.assert_not_called( )
+
+            # Starting another task must not reuse the previous task's vocabulary.
+            state.word_list = ['stale']
+            state.now_unit = 'stale'
+            state.all_unit = {'task_list': []}
+            worker.class_task_answer = Mock( )
+            worker.complete_test({'task_name': 'custom', 'course_id': 'course',
+                                  'release_id': 1, 'task_type': 2, 'progress': 0})
+            self.assertEqual(state.word_list, [])
+            self.assertEqual(state.now_unit, '')
 
 
 if __name__ == '__main__':

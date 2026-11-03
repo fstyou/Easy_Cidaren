@@ -2,9 +2,22 @@
 
 from datetime import datetime
 
-from easy_cidaren.logging.config import Log
+from easy_cidaren.api.tasks import get_class_task
+from easy_cidaren.app_logging.config import Log
 
 basic_util = Log("task_selection")
+
+
+def load_class_tasks(public_info):
+    public_info.class_task = []
+    public_info.task_list = []
+    page = 1
+    get_class_task(public_info, page)
+    while public_info.task_total_count > page * 10:
+        page += 1
+        get_class_task(public_info, page)
+    get_all_task(public_info)
+    return public_info.task_list
 
 
 def task_times(task):
@@ -12,7 +25,7 @@ def task_times(task):
     start = task.get('start_time')
     duration = task.get('over_time')
     
-    def format_time(value):
+    def format_time(value: int | float | None) -> str:
         try:
             if isinstance(value, bool) or not isinstance(value, (int, float)) or value <= 0:
                 return '—'

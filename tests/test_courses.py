@@ -1,4 +1,5 @@
-import importlib.util
+from tests.module_loader import load_module
+
 import sys
 import types
 import unittest
@@ -16,15 +17,13 @@ class CourseTests(unittest.TestCase):
         modules = {
             'easy_cidaren.api.sessions': sessions,
             'easy_cidaren.api.response': types.SimpleNamespace(handle_response = Mock( )),
-            'easy_cidaren.logging.config': types.SimpleNamespace(
+            'easy_cidaren.app_logging.config': types.SimpleNamespace(
                     Log = lambda name: types.SimpleNamespace(logger = Mock( ))),
             'easy_cidaren.utils.helpers': types.SimpleNamespace(create_timestamp = lambda: 123),
         }
         path = Path(__file__).resolve( ).parents[1] / 'easy_cidaren' / 'api' / 'courses.py'
         with patch.dict(sys.modules, modules), patch.object(api_package, 'sessions', sessions, create = True):
-            spec = importlib.util.spec_from_file_location('test_courses_module', path)
-            module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(module)
+            module = load_module('test_courses_module', path)
             self.assertEqual(module.use_api_get_prototype('a&b'), 'test')
             self.assertEqual(session.get.call_args.kwargs['params']['word'], 'a&b')
             self.assertEqual(session.get.call_args.kwargs['params']['timestamp'], 123)

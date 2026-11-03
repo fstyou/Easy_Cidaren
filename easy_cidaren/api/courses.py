@@ -2,14 +2,14 @@ import re
 
 import easy_cidaren.api.sessions as requests
 from easy_cidaren.api.response import handle_response
-from easy_cidaren.logging.config import Log
+from easy_cidaren.app_logging.config import Log
 from easy_cidaren.utils.helpers import create_timestamp
 
 basic_api = Log("basic_api")
 basic_url = 'https://app.vocabgo.com/student/api/Student/'
 
 
-def use_api_get_prototype(word: str) -> str:
+def use_api_get_prototype(word: str) -> str | None:
     """
     利用api获取单词原型
     :param word: 目标单词

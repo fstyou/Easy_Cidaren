@@ -1,6 +1,6 @@
 """Validate service responses and report protocol errors."""
 
-from easy_cidaren.logging.config import Log
+from easy_cidaren.app_logging.config import Log
 
 logger = Log('api_response').logger
 

@@ -74,7 +74,7 @@ easy_cidaren/
   app.py                        程序初始化与启动
   api/                          服务端接口与请求
   core/                         状态、任务、答题与词库逻辑
-  logging/                      日志配置、格式与导出
+  app_logging/                  日志配置、格式与导出
   security/                     数据解码和签名
   token_capture/                token 捕获与代理实现
   ui/                           窗口、弹窗和设置

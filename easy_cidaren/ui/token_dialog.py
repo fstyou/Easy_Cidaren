@@ -4,7 +4,7 @@ from PyQt6 import QtCore, QtWidgets
 from PyQt6.QtCore import QThread, pyqtSignal
 from PyQt6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton
 
-from easy_cidaren.logging.config import Log
+from easy_cidaren.app_logging.config import Log
 from easy_cidaren.token_capture.service import TokenCaptureService
 
 dialog_logger = Log("builtin_token").logger
@@ -67,7 +67,7 @@ class CaptureProgressDialog(QDialog):
             QPushButton#captureCancel:hover { background: #e1ebf8; }
             QPushButton#captureCancel:disabled { color: #9cabbc; }
         """)
-        layout = QVBoxLayout(self)
+        self.content_layout = layout = QVBoxLayout(self)
         layout.setContentsMargins(28, 26, 28, 24)
         layout.setSpacing(16)
         layout.setAlignment(QtCore.Qt.AlignmentFlag.AlignTop)
@@ -91,7 +91,7 @@ class CaptureProgressDialog(QDialog):
         self.status_frame.setObjectName("captureStatus")
         self.status_frame.setSizePolicy(QtWidgets.QSizePolicy.Policy.Preferred,
                                         QtWidgets.QSizePolicy.Policy.Fixed)
-        status_layout = QVBoxLayout(self.status_frame)
+        self.status_layout = status_layout = QVBoxLayout(self.status_frame)
         status_layout.setContentsMargins(14, 12, 14, 12)
         status_layout.setSpacing(8)
         self.status_label = QLabel("正在准备，请稍候…")
@@ -114,26 +114,27 @@ class CaptureProgressDialog(QDialog):
         self.buttons.addWidget(self.cancel_button)
         layout.addLayout(self.buttons)
     
-    def showEvent(self, event):
-        super( ).showEvent(event)
+    def showEvent(self, a0):
+        super( ).showEvent(a0)
         QtCore.QTimer.singleShot(0, self._fit_content)
     
     def _fit_content(self):
         """Size the dialog to its wrapped text instead of expanding to screen height."""
         if not self.isVisible( ):
             return
-        margins = self.layout( ).contentsMargins( )
+        margins = self.content_layout.contentsMargins( )
         width = self.width( ) - margins.left( ) - margins.right( )
         
         def label_height(label):
-            height = label.heightForWidth(width) if label.hasHeightForWidth( ) else -1
-            return max(label.minimumSizeHint( ).height( ), height if height > 0 else label.sizeHint( ).height( ))
+            preferred_height = label.heightForWidth(width) if label.hasHeightForWidth( ) else -1
+            return max(label.minimumSizeHint( ).height( ),
+                       preferred_height if preferred_height > 0 else label.sizeHint( ).height( ))
         
-        self.status_frame.layout( ).activate( )
-        status_height = self.status_frame.layout( ).totalHeightForWidth(width)
+        self.status_layout.activate( )
+        status_height = self.status_layout.totalHeightForWidth(width)
         if status_height < 0:
             status_height = self.status_frame.sizeHint( ).height( )
-        height = (margins.top( ) + margins.bottom( ) + self.layout( ).spacing( ) * 4
+        height = (margins.top( ) + margins.bottom( ) + self.content_layout.spacing( ) * 4
                   + label_height(self.title_label) + label_height(self.subtitle_label)
                   + label_height(self.instructions) + status_height + self.buttons.sizeHint( ).height( ))
         self.setFixedHeight(height)
@@ -191,9 +192,11 @@ class CaptureProgressDialog(QDialog):
             self.status_label.setText("正在停止获取并清理代理…")
             self.cancel_requested.emit( )
     
-    def closeEvent(self, event):
+    def closeEvent(self, a0):
+        if a0 is None:
+            return
         if self._running:
             self.reject( )
-            event.ignore( )
+            a0.ignore( )
         else:
-            event.accept( )
+            a0.accept( )

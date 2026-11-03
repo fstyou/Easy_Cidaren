@@ -2,7 +2,7 @@ import io
 import logging
 import unittest
 
-from easy_cidaren.logging.format import ConsoleFilter, ConsoleFormatter, MAX_CONSOLE_MESSAGE, console_level
+from easy_cidaren.app_logging.format import ConsoleFilter, ConsoleFormatter, MAX_CONSOLE_MESSAGE, console_level
 
 
 class ConsoleLoggingTests(unittest.TestCase):

@@ -1,4 +1,5 @@
-import importlib.util
+from tests.module_loader import load_module
+
 import logging
 import sys
 import types
@@ -16,13 +17,11 @@ class WordRevertTests(unittest.TestCase):
         modules = {
             'spacy': spacy,
             'easy_cidaren.api.courses': types.SimpleNamespace(use_api_get_prototype = fallback),
-            'easy_cidaren.logging.config': types.SimpleNamespace(Log = lambda name: logger),
+            'easy_cidaren.app_logging.config': types.SimpleNamespace(Log = lambda name: logger),
         }
         path = Path(__file__).resolve( ).parents[1] / 'easy_cidaren' / 'utils' / 'word_revert.py'
         with patch.dict(sys.modules, modules):
-            spec = importlib.util.spec_from_file_location('test_word_revert_module', path)
-            module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(module)
+            module = load_module('test_word_revert_module', path)
             self.assertEqual(module.word_revert('ONE'), 'one')
             self.assertEqual(module.word_revert('TWO'), 'two')
             self.assertEqual(spacy.load.call_count, 1)
@@ -30,6 +29,15 @@ class WordRevertTests(unittest.TestCase):
             spacy.load.side_effect = RuntimeError('model unavailable')
             self.assertEqual(module.word_revert('word'), 'fallback')
             fallback.assert_called_once_with('word')
+            fallback.return_value = None
+            with self.assertRaisesRegex(ValueError, '无法获取单词原型'):
+                module.word_revert('missing')
+            spacy.load.side_effect = None
+            model.side_effect = None
+            model.return_value = []
+            module._load_model.cache_clear( )
+            with self.assertRaisesRegex(ValueError, '语言模型未返回单词原型'):
+                module.word_revert('empty')
 
 
 if __name__ == '__main__':

@@ -17,7 +17,7 @@ def record_answer_result(public_info, result):
         stem = exam.get('stem')
         word_zh = stem.get('remark') if isinstance(stem, dict) else None
         corrects = result.get('answer_corrects')
-        if public_info._self_learn_lib:
+        if public_info.self_learn_lib:
             if mode == 32 and word_zh and corrects:
                 # mode 32: answer_corrects 是完整短语, 入短语库
                 add_answer(word_zh, corrects)

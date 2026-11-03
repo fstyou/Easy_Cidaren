@@ -1,4 +1,5 @@
-import importlib.util
+from tests.module_loader import load_module
+
 import sys
 import types
 import unittest
@@ -7,9 +8,16 @@ from unittest.mock import patch
 
 
 class SessionTests(unittest.TestCase):
+    def test_uninitialized_session_rejects_requests(self):
+        from easy_cidaren.api.sessions import _UninitializedSession
+
+        with self.assertRaisesRegex(RuntimeError, '尚未初始化'):
+            _UninitializedSession( ).get('https://example.invalid', timeout = 1)
+
     def test_login_sessions_have_independent_headers(self):
         requests = types.ModuleType('requests')
         requests.exceptions = types.SimpleNamespace( )
+        requests.Session = type('Session', (), {})
         requests.session = lambda: types.SimpleNamespace(headers = {})
         modules = {
             'requests': requests,
@@ -19,13 +27,11 @@ class SessionTests(unittest.TestCase):
         }
         path = Path(__file__).resolve( ).parents[1] / 'easy_cidaren' / 'api' / 'sessions.py'
         with patch.dict(sys.modules, modules):
-            spec = importlib.util.spec_from_file_location('test_sessions_module', path)
-            module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(module)
+            module = load_module('test_sessions_module', path)
             module.set_token('first')
             module.rqs_session.headers['extra'] = 'value'
             self.assertNotIn('extra', module.class_task_request.headers)
-            self.assertNotIn('Usertoken', module.headers)
+            self.assertNotIn('Usertoken', module.base_headers)
             self.assertNotIn('Content-Length', module.rqs2_session.headers)
             module.set_token('second')
             self.assertEqual(module.class_task_request.headers['Usertoken'], 'second')

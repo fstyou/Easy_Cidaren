@@ -3,7 +3,7 @@ import glob
 import logging
 import os
 
-from easy_cidaren.logging.format import ConsoleFilter, ConsoleFormatter, DATE_FORMAT, FILE_FORMAT, console_level
+from easy_cidaren.app_logging.format import ConsoleFilter, ConsoleFormatter, DATE_FORMAT, FILE_FORMAT, console_level
 from easy_cidaren.paths import LOG_DIR
 
 # 创建logs目录（如果不存在）
@@ -43,7 +43,7 @@ def setup_logger( ):
     
     # 只替换本项目的处理器，避免影响宿主或其他库的日志配置。
     for handler in logger_instance.handlers[:]:
-        if getattr(handler, '_easy_cidaren_handler', False):
+        if handler.name in ('easy_cidaren.file', 'easy_cidaren.console'):
             logger_instance.removeHandler(handler)
             handler.close( )
     
@@ -52,13 +52,13 @@ def setup_logger( ):
     )
     
     file_handler = logging.FileHandler(log_filename, encoding = "utf-8")
-    file_handler._easy_cidaren_handler = True
+    file_handler.name = 'easy_cidaren.file'
     file_handler.setLevel(logging.DEBUG)
     file_handler.setFormatter(formatter)
     logger_instance.addHandler(file_handler)
     
     console_handler = logging.StreamHandler( )
-    console_handler._easy_cidaren_handler = True
+    console_handler.name = 'easy_cidaren.console'
     console_handler.setLevel(console_level(os.environ.get('EASY_CIDAREN_LOG_LEVEL')))
     console_handler.addFilter(ConsoleFilter( ))
     console_handler.setFormatter(ConsoleFormatter( ))

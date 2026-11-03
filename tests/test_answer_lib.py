@@ -1,4 +1,5 @@
-import importlib.util
+from tests.module_loader import load_module
+
 import json
 import sys
 import tempfile
@@ -21,13 +22,11 @@ class AnswerLibraryTests(unittest.TestCase):
         path = Path(__file__).resolve( ).parents[1] / 'easy_cidaren' / 'core' / 'answer_library.py'
         with tempfile.TemporaryDirectory( ) as directory:
             modules = {
-                'easy_cidaren.logging.config': types.SimpleNamespace(Log = FakeLog),
+                'easy_cidaren.app_logging.config': types.SimpleNamespace(Log = FakeLog),
                 'easy_cidaren.paths': types.SimpleNamespace(DATA_DIR = Path(directory)),
             }
             with patch.dict(sys.modules, modules):
-                spec = importlib.util.spec_from_file_location('test_answer_library_module', path)
-                library = importlib.util.module_from_spec(spec)
-                spec.loader.exec_module(library)
+                library = load_module('test_answer_library_module', path)
                 library.add_answer('含义', ['a phrase'])
                 library.add_answer('含义', ['a phrase'])
                 library.add_word_answer('含义', ['word'])

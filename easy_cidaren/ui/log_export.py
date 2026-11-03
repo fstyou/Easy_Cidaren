@@ -4,8 +4,8 @@ import logging
 import shutil
 from pathlib import Path
 
-from easy_cidaren.logging.config import log_filename
-from easy_cidaren.logging.export import export_log
+from easy_cidaren.app_logging.config import log_filename
+from easy_cidaren.app_logging.export import export_log
 from easy_cidaren.ui.dialogs import select_file, show_error, show_information
 
 

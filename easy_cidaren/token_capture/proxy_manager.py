@@ -3,7 +3,7 @@ import re
 import subprocess
 from pathlib import Path
 
-from easy_cidaren.logging.config import Log
+from easy_cidaren.app_logging.config import Log
 
 if platform.system( ) == "Windows":
     import winreg
@@ -16,7 +16,8 @@ class ProxyManager:
         self.os = platform.system( )
         self.original_settings = {}  # 保存原始代理设置
     
-    def _get_network_services(self):
+    @staticmethod
+    def _get_network_services( ):
         """获取 macOS 网络服务列表"""
         output = subprocess.check_output(
                 ["networksetup", "-listallnetworkservices"],
@@ -24,7 +25,8 @@ class ProxyManager:
         )
         return [s for s in output.splitlines( )[1:] if not s.startswith("*")]
     
-    def _get_proxy_info(self, service):
+    @staticmethod
+    def _get_proxy_info(service):
         """获取指定服务的当前代理设置"""
         try:
             # 获取 HTTP 代理
@@ -58,7 +60,8 @@ class ProxyManager:
             proxy_logger.logger.error("读取 macOS 代理设置失败：%s", exc)
             return None
     
-    def _get_windows_proxy_settings(self):
+    @staticmethod
+    def _get_windows_proxy_settings( ):
         """获取 Windows 当前的代理设置"""
         try:
             key = winreg.OpenKey(
@@ -94,7 +97,8 @@ class ProxyManager:
             proxy_logger.logger.error(f"读取代理设置失败: {e}")
             return None
     
-    def _set_windows_proxy_settings(self, enabled, server = "", override = "<local>"):
+    @staticmethod
+    def _set_windows_proxy_settings(enabled, server = "", override = "<local>"):
         """设置 Windows 代理"""
         try:
             key = winreg.OpenKey(
@@ -123,7 +127,8 @@ class ProxyManager:
             proxy_logger.logger.error(f"设置代理失败: {e}")
             return False
     
-    def _windows_store_has_cert(self, store_name):
+    @staticmethod
+    def _windows_store_has_cert(store_name):
         """检测指定证书存储是否已有 mitmproxy 证书"""
         try:
             ps_cmd = (
@@ -138,10 +143,10 @@ class ProxyManager:
                     timeout = 10
             )
             return int(result.stdout.strip( ) or "0") > 0
-        except Exception:
+        except (OSError, subprocess.SubprocessError, ValueError):
             return False
     
-    def _ensure_windows_mitm_cert(self):
+    def ensure_windows_mitm_cert(self):
         """自动导入 mitmproxy 证书到 Windows 系统"""
         cert_path = Path.home( ) / ".mitmproxy" / "mitmproxy-ca-cert.cer"
         if not cert_path.exists( ):
@@ -192,7 +197,7 @@ class ProxyManager:
         
         elif self.os == "Windows":
             # 先确保证书已导入
-            self._ensure_windows_mitm_cert( )
+            self.ensure_windows_mitm_cert( )
             
             # 保存当前代理设置
             self.original_settings['windows'] = self._get_windows_proxy_settings( )

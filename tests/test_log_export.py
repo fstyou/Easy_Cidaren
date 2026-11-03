@@ -3,7 +3,7 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from easy_cidaren.logging.export import export_log
+from easy_cidaren.app_logging.export import export_log
 
 
 class LogExportTests(unittest.TestCase):

@@ -1,4 +1,5 @@
-import importlib.util
+from tests.module_loader import load_module
+
 import os
 import sys
 import tempfile
@@ -15,9 +16,7 @@ class CaptureAddonTests(unittest.TestCase):
         with tempfile.TemporaryDirectory( ) as directory, \
                 patch.dict(os.environ, {'EASY_CIDAREN_TOKEN_FILE': str(Path(directory) / 'last_token.txt')}), \
                 patch.dict(sys.modules, {'mitmproxy': types.SimpleNamespace(http = http)}):
-            spec = importlib.util.spec_from_file_location('test_capture_addon_module', path)
-            module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(module)
+            module = load_module('test_capture_addon_module', path)
             catcher = module.TokenCatcher( )
             catcher.response(types.SimpleNamespace(request = types.SimpleNamespace(
                     host = 'example.com', headers = {'UserToken': 'other'})))

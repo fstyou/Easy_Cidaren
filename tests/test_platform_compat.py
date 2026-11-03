@@ -1,4 +1,5 @@
-import importlib.util
+from tests.module_loader import load_module
+
 import os
 import sys
 import tempfile
@@ -41,10 +42,8 @@ class PlatformCompatibilityTests(unittest.TestCase):
     
     def test_linux_proxy_does_not_claim_to_configure_other_processes(self):
         path = ROOT / "easy_cidaren" / "token_capture" / "proxy_manager.py"
-        with patch.dict(sys.modules, {"easy_cidaren.logging.config": types.SimpleNamespace(Log = FakeLog)}):
-            spec = importlib.util.spec_from_file_location("test_proxy_manager", path)
-            module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(module)
+        with patch.dict(sys.modules, {"easy_cidaren.app_logging.config": types.SimpleNamespace(Log = FakeLog)}):
+            module = load_module("test_proxy_manager", path)
             manager = module.ProxyManager( )
             manager.os = "Linux"
             original = dict(os.environ)
@@ -54,10 +53,8 @@ class PlatformCompatibilityTests(unittest.TestCase):
     
     def test_proxy_restore_reports_failures_after_attempting_both_protocols(self):
         path = ROOT / 'easy_cidaren' / 'token_capture' / 'proxy_manager.py'
-        with patch.dict(sys.modules, {'easy_cidaren.logging.config': types.SimpleNamespace(Log = FakeLog)}):
-            spec = importlib.util.spec_from_file_location('test_proxy_restore', path)
-            module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(module)
+        with patch.dict(sys.modules, {'easy_cidaren.app_logging.config': types.SimpleNamespace(Log = FakeLog)}):
+            module = load_module('test_proxy_restore', path)
             manager = module.ProxyManager( )
             manager.os = 'Darwin'
             manager.original_settings = {'Wi-Fi': {
@@ -97,14 +94,12 @@ class PlatformCompatibilityTests(unittest.TestCase):
                 return self.returncode
         
         modules = {
-            'easy_cidaren.logging.config': types.SimpleNamespace(Log = FakeLog),
+            'easy_cidaren.app_logging.config': types.SimpleNamespace(Log = FakeLog),
             'easy_cidaren.token_capture.proxy_manager': types.SimpleNamespace(ProxyManager = FakeProxy),
         }
         path = ROOT / 'easy_cidaren' / 'token_capture' / 'service.py'
         with patch.dict(sys.modules, modules), tempfile.TemporaryDirectory( ) as directory:
-            spec = importlib.util.spec_from_file_location('test_capture_service', path)
-            module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(module)
+            module = load_module('test_capture_service', path)
             capture_dir = Path(directory) / 'runtime' / 'token_capture'
             capture_dir.mkdir(parents = True)
             (capture_dir / 'last_token.txt').write_text('previous-token', encoding = 'utf-8')
@@ -149,7 +144,7 @@ class PlatformCompatibilityTests(unittest.TestCase):
     def test_task_api_response_handler_after_package_move(self):
         import easy_cidaren.api as api_package
         modules = {
-            'easy_cidaren.logging.config': types.SimpleNamespace(Log = FakeLog),
+            'easy_cidaren.app_logging.config': types.SimpleNamespace(Log = FakeLog),
             'easy_cidaren.api.sessions': types.ModuleType('easy_cidaren.api.sessions'),
             'easy_cidaren.security.decode': types.SimpleNamespace(debase64 = lambda *args: None, JV_TWO = (),
                                                                   JV_THREE = ()),
@@ -160,9 +155,7 @@ class PlatformCompatibilityTests(unittest.TestCase):
         path = ROOT / 'easy_cidaren' / 'api' / 'tasks.py'
         with patch.dict(sys.modules, modules), \
                 patch.object(api_package, 'sessions', modules['easy_cidaren.api.sessions'], create = True):
-            spec = importlib.util.spec_from_file_location('test_tasks_module', path)
-            module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(module)
+            module = load_module('test_tasks_module', path)
             response = types.SimpleNamespace(json = lambda: {'code': 1}, text = 'ok')
             module.handle_response(response)
             unknown = types.SimpleNamespace(json = lambda: {'jv': 'unknown'})

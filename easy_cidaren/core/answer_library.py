@@ -2,7 +2,7 @@ import copy
 import json
 import threading
 
-from easy_cidaren.logging.config import Log
+from easy_cidaren.app_logging.config import Log
 from easy_cidaren.paths import DATA_DIR
 from easy_cidaren.utils.json_store import write_json
 
@@ -18,7 +18,7 @@ def load_lib(force = False):
         path = DATA_DIR / 'answer_lib.json'
         if path.exists( ):
             try:
-                with open(path, 'r', encoding = 'utf-8') as f:
+                with open(path, encoding = 'utf-8') as f:
                     _lib = json.load(f)
             except (OSError, json.JSONDecodeError) as e:
                 answer_lib_logger.error(f"加载答案库失败: {e}")

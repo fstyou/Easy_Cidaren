@@ -1,8 +1,8 @@
 import base64
 import json
-import re
+from typing import TypedDict
 
-from easy_cidaren.logging.config import Log
+from easy_cidaren.app_logging.config import Log
 
 bs64 = Log("base64")
 
@@ -13,7 +13,18 @@ JV_TWO = {
     '2_10234': [0, 1, 2, 4, 5, 6, 7, 46, 65, 66, 198, 270, 328, 329],
 }
 
-JV_THREE = {
+class NoiseRule(TypedDict):
+    s: int
+    n: int
+
+
+class DecodeConfig(TypedDict):
+    uc: list[NoiseRule]
+    avg: int
+    loc: list[int]
+
+
+JV_THREE: dict[str, DecodeConfig] = {
     '3_1021': {
         "uc": [{"s": 0, "n": 1}, {"s": 1, "n": 2}, {"s": 33, "n": 1}, {"s": 57, "n": 1}, {"s": 111, "n": 1}],
         "avg": 5, "loc": [1, 3, 2, 0, 4]
@@ -29,6 +40,20 @@ JV_THREE = {
 }
 
 DEFAULT_JV_TWO = JV_TWO['2_9214']
+
+
+def _decode_json(data: str) -> dict:
+    text = base64.b64decode(data.encode( )).decode( )
+    start = text.find('{')
+    if start < 0:
+        raise ValueError('解码数据中没有 JSON 对象')
+    # Some service payloads prepend one extra opening brace.
+    if text.startswith('{{', start):
+        start += 1
+    result, _ = json.JSONDecoder( ).raw_decode(text, start)
+    if not isinstance(result, dict):
+        raise ValueError('解码结果不是 JSON 对象')
+    return result
 
 
 def strip_noise(d: str, rules) -> str:
@@ -50,53 +75,39 @@ def strip_noise(d: str, rules) -> str:
     return d
 
 
-def debase64(data: dict or str, jv: str = 0):
+def debase64(data: dict | str, jv: str | int | None = 0):
     """
     base64解码
     :param data: 待解码的数据
     :param jv: 乱码版本标识，默认为0
     :return:
     """
-    if type(data) is dict:
+    if isinstance(data, dict):
         data = data["data"]
+    if not isinstance(data, str):
+        raise ValueError('待解码数据必须为字符串')
     
     jv = str(jv or '')
     bs64.logger.debug("开始解码 jv=%s，数据：%s", jv, data, extra = {'file_only': True})
     try:
-        bs64_str = base64.b64decode(data.encode("utf-8")).decode("utf-8")
+        return _decode_json(data)
     except (ValueError, UnicodeError):
+        if jv in ('', '0'):
+            raise
         if jv.startswith("2_") and jv in JV_TWO:
             clean_data = strip_noise(data, JV_TWO[jv])
         elif jv.startswith("3_") and jv in JV_THREE:
             cfg = JV_THREE[jv]
             d = strip_noise(data, cfg["uc"])
             chunk = len(d) // cfg["avg"]
+            if chunk == 0:
+                raise ValueError('混淆数据长度不足，无法恢复分块')
             pieces = [d[i * chunk:(i + 1) * chunk] for i in range(cfg["avg"])]
             out = "".join(pieces[cfg["loc"].index(i)] for i in range(cfg["avg"]))
-            if len(d) % chunk:
-                out += d[cfg["avg"] * chunk:]
+            out += d[cfg["avg"] * chunk:]
             clean_data = out
         else:
             clean_data = strip_noise(data, DEFAULT_JV_TWO)
         
         bs64.logger.debug("去除混淆后：%s", clean_data, extra = {'file_only': True})
-        bs64_str = base64.b64decode(clean_data.encode("utf-8")).decode("utf-8", errors = 'ignore')
-    result = re.findall("{\".*", bs64_str)[0]
-    try:
-        decoded = json.loads(result)
-        bs64.logger.debug("解码结果：%s", result, extra = {'file_only': True})
-        return decoded
-    except json.JSONDecodeError:
-        if result.startswith('{'):
-            result = result[1:]
-            result = re.findall("{\".*", result)[0]
-            try:
-                decoded = json.loads(result)
-                bs64.logger.debug("解码结果：%s", result, extra = {'file_only': True})
-                return decoded
-            except json.JSONDecodeError:
-                bs64.logger.error("解码失败！")
-                raise
-        else:
-            bs64.logger.error("解码失败！")
-            raise
+        return _decode_json(clean_data)

@@ -7,7 +7,7 @@ import threading
 import time
 from pathlib import Path
 
-from easy_cidaren.logging.config import Log
+from easy_cidaren.app_logging.config import Log
 from easy_cidaren.token_capture.proxy_manager import ProxyManager
 from easy_cidaren.token_capture.token_store import SAVED_TOKEN_FILE
 from easy_cidaren.utils.executables import find_mitmdump
@@ -74,7 +74,7 @@ class TokenCaptureService:
             
             # 启用代理
             service_logger.info("正在启用系统代理 127.0.0.1:8888")
-            self.proxy_manager.enable_proxy(host = "127.0.0.1", port = 8888)
+            self.proxy_manager.enable_proxy( )
             if self._stop_requested.is_set( ):
                 return None
             if status_callback:
@@ -87,7 +87,7 @@ class TokenCaptureService:
                 startupinfo = subprocess.STARTUPINFO( )
                 startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
             
-            addon_path = os.path.join(os.path.dirname(__file__), "addon.py")
+            addon_path = str(Path(__file__).with_name("addon.py"))
             env = os.environ.copy( )
             env['EASY_CIDAREN_TOKEN_FILE'] = str(token_file.resolve( ))
             self.mitm_process = subprocess.Popen(
@@ -134,7 +134,7 @@ class TokenCaptureService:
                     if current_version != previous_version:
                         previous_version = current_version
                         try:
-                            with open(token_file, 'r', encoding = 'utf-8') as f:
+                            with open(token_file, encoding = 'utf-8') as f:
                                 token = f.read( ).strip( )
                                 if token:
                                     service_logger.info("成功捕获到 UserToken")
@@ -157,7 +157,8 @@ class TokenCaptureService:
         finally:
             self.cleanup(status_callback)
     
-    def _is_port_in_use(self, port):
+    @staticmethod
+    def _is_port_in_use(port):
         """检测端口是否被占用"""
         try:
             with socket.create_connection(("127.0.0.1", port), timeout = 1):
@@ -189,7 +190,7 @@ class TokenCaptureService:
         # 导入证书到系统证书库（仅 Windows 支持免管理员导入）
         if sys.platform == "win32" and self.proxy_manager:
             try:
-                self.proxy_manager._ensure_windows_mitm_cert( )
+                self.proxy_manager.ensure_windows_mitm_cert( )
                 service_logger.info("mitmproxy 证书导入完成")
             except Exception as e:
                 service_logger.error(f"导入 mitmproxy 证书失败: {e}")

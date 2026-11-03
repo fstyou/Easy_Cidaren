@@ -3,7 +3,7 @@ from functools import lru_cache
 import spacy
 
 from easy_cidaren.api.courses import use_api_get_prototype
-from easy_cidaren.logging.config import Log
+from easy_cidaren.app_logging.config import Log
 from easy_cidaren.paths import MODEL_DIR
 
 model_path = str(MODEL_DIR)
@@ -35,4 +35,8 @@ def word_revert(word: str) -> str:
             return token.lemma_
     except Exception as e:
         module.logger.error("单词还原失败，使用在线接口：%s", e)
-        return use_api_get_prototype(word)
+        prototype = use_api_get_prototype(word)
+        if isinstance(prototype, str) and prototype:
+            return prototype
+        raise ValueError(f"无法获取单词原型：{word}") from e
+    raise ValueError(f"语言模型未返回单词原型：{word}")

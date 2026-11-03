@@ -11,7 +11,7 @@ class TokenCatcher:
             return
         
         token = flow.request.headers.get("UserToken")
-        if token and token.strip( ):
+        if isinstance(token, str) and token.strip( ):
             descriptor, temporary = tempfile.mkstemp(prefix = '.token-', dir = os.path.dirname(token_file))
             try:
                 with os.fdopen(descriptor, 'w', encoding = 'utf-8') as stream:

@@ -8,5 +8,5 @@ def encrypt_md5(data: str) -> str:
     :return:
     """
     md5 = hashlib.md5( )
-    md5.update(data.encode("utf-8"))
+    md5.update(data.encode( ))
     return md5.hexdigest( )

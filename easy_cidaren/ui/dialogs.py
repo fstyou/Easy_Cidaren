@@ -1,9 +1,10 @@
 """Consistent Chinese labels for application dialogs."""
 
 import os
+from typing import cast
 
 from PyQt6 import QtCore
-from PyQt6.QtWidgets import QFileDialog, QMessageBox
+from PyQt6.QtWidgets import QAbstractButton, QFileDialog, QMessageBox
 
 
 def create_message(parent, title, message, icon, button_text = "知道了"):
@@ -13,7 +14,7 @@ def create_message(parent, title, message, icon, button_text = "知道了"):
     dialog.setTextFormat(QtCore.Qt.TextFormat.PlainText)
     dialog.setText(str(message))
     dialog.setStandardButtons(QMessageBox.StandardButton.Ok)
-    dialog.button(QMessageBox.StandardButton.Ok).setText(button_text)
+    cast(QAbstractButton, dialog.button(QMessageBox.StandardButton.Ok)).setText(button_text)
     dialog.setEscapeButton(QMessageBox.StandardButton.Ok)
     return dialog
 
@@ -39,8 +40,8 @@ def confirm_action(parent, title, message, *, confirm_text, detail = "", default
     if detail:
         dialog.setInformativeText(detail)
     dialog.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
-    dialog.button(QMessageBox.StandardButton.Yes).setText(confirm_text)
-    dialog.button(QMessageBox.StandardButton.No).setText("取消")
+    cast(QAbstractButton, dialog.button(QMessageBox.StandardButton.Yes)).setText(confirm_text)
+    cast(QAbstractButton, dialog.button(QMessageBox.StandardButton.No)).setText("取消")
     dialog.setEscapeButton(QMessageBox.StandardButton.No)
     dialog.setDefaultButton(QMessageBox.StandardButton.Yes if default_confirm else QMessageBox.StandardButton.No)
     return dialog.exec( ) == QMessageBox.StandardButton.Yes
@@ -48,9 +49,9 @@ def confirm_action(parent, title, message, *, confirm_text, detail = "", default
 
 def select_file(parent, title, path, name_filter, *, save = False):
     dialog = QFileDialog(parent, title)
-    dialog.setOption(QFileDialog.Option.DontUseNativeDialog, True)
+    dialog.setOption(QFileDialog.Option.DontUseNativeDialog)
     if save:
-        dialog.setOption(QFileDialog.Option.DontConfirmOverwrite, True)
+        dialog.setOption(QFileDialog.Option.DontConfirmOverwrite)
     dialog.setAcceptMode(QFileDialog.AcceptMode.AcceptSave if save else QFileDialog.AcceptMode.AcceptOpen)
     dialog.setFileMode(QFileDialog.FileMode.AnyFile if save else QFileDialog.FileMode.ExistingFile)
     dialog.setNameFilter(name_filter)

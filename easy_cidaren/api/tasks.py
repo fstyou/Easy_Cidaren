@@ -5,8 +5,8 @@ from functools import wraps
 
 import easy_cidaren.api.sessions as requests
 from easy_cidaren.api.response import handle_task_response as handle_response
+from easy_cidaren.app_logging.config import Log
 from easy_cidaren.core.public_info import PublicInfo
-from easy_cidaren.logging.config import Log
 from easy_cidaren.security.decode import debase64, JV_TWO, JV_THREE
 from easy_cidaren.security.signing import encrypt_md5
 from easy_cidaren.utils.helpers import create_timestamp
@@ -25,9 +25,10 @@ def request_with_known_jv(request_func, url, **kwargs):
             jv = str(response.json( ).get('jv', ''))
             if not jv or jv == '0' or jv in JV_TWO or jv in JV_THREE:
                 return response
-        except Exception:
+        except (ValueError, AttributeError):
             return response
-        time.sleep(random.uniform(2, 3))
+        if _ < 4:
+            time.sleep(random.uniform(2, 3))
     api.logger.error("连续 5 次请求的 jv 均不在已知范围内")
     raise ValueError("jv 解码失败")
 
@@ -126,7 +127,6 @@ def get_exam(public_info):
     else:
         params.update({'course_id': public_info.course_id})
     rsp = request_with_known_jv(requests.class_task_request.get, basic_url + url, params = params)
-    # {'task_id': 143960071, 'task_type': 1, 'topic_mode': 0, 'stem': {'content': 'trade', 'remark': None, 'ph_us_url': '/Resource/unitAudio_US/JJ_3_1_0/trade.mp3', 'ph_en_url': '/Resource/unitAudio_EN/JJ_3_1_0/trade.mp3', 'au_addr': None}, 'options': [{'content': 'verb 互相交换', 'remark': None, 'answer': None, 'answer_tag': 0, 'check_code': None, 'sub_options': None, 'ph_info': {'ph_en': 'treɪd', 'ph_en_url': '/Resource/unitAudio_EN/JJ_3_1_0/trade.mp3', 'ph_us': 'treɪd', 'ph_us_url': '/Resource/unitAudio_US/JJ_3_1_0/trade.mp3', 'group': '0'}}, {'content': 'noun 职业；手艺', 'remark': None, 'answer': None, 'answer_tag': 1, 'check_code': None, 'sub_options': None, 'ph_info': {'ph_en': 'treɪd', 'ph_en_url': '/Resource/unitAudio_EN/JJ_3_1_0/trade.mp3', 'ph_us': 'treɪd', 'ph_us_url': '/Resource/unitAudio_US/JJ_3_1_0/trade.mp3', 'group': '0'}}], 'sound_mark': 'treɪd', 'ph_en': 'treɪd', 'ph_us': 'treɪd', 'answer_num': 1, 'chance_num': 1, 'topic_done_num': 1, 'topic_total': 127, 'w_lens': [], 'w_len': 0, 'w_tip': '', 'tips': '', 'word_type': 1, 'enable_i': 2, 'enable_i_i': 2, 'enable_i_o': 2, 'topic_code': 'lFiAe5drW46DfnrEaJVol2hbXlrWqpianVhlZmGZlmKPvo+UkWOTZWdiYm9ubJuXamCVaGpnaGSUj2STZGhob2JybGuWnG5tjZRlZWuVcmxmYW9pZZSSZ2mebmZtcWRsZWiZaWdsZGaW', 'answer_state': 1, 'show_card_type': 1}
     # 检查请求结果
     handle_response(rsp)
     if rsp.json( ).get('msg') == '任务已完成！' or rsp.json( ).get('msg') == '需要选词！':

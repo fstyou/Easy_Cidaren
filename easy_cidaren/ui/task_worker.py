@@ -8,11 +8,10 @@ from PyQt6.QtCore import QThread, pyqtSignal
 from easy_cidaren.api.courses import get_all_unit, get_unit_words, get_book_all_words
 from easy_cidaren.api.response import SecurityVerifyError
 from easy_cidaren.api.tasks import get_exam, select_all_word, skip_exam
+from easy_cidaren.app_logging.config import Log
 from easy_cidaren.core.answers import answer, jump_read, submit
 from easy_cidaren.core.question_runner import QuestionSkipError, run_questions
 from easy_cidaren.core.word_list import extract_book_word, handle_word_result, query_word_unit
-from easy_cidaren.logging.config import Log
-from easy_cidaren.security.decode import debase64
 
 
 class TaskWorker(QThread):
@@ -107,6 +106,8 @@ class TaskWorker(QThread):
         self.public_info.is_self_built = False
         self.public_info.get_book_words_data = []
         self.public_info.all_unit_name = []
+        self.public_info.word_list = []
+        self.public_info.now_unit = ''
         task_name = task_info['task_name']
         self.public_info.course_id = task_info['course_id']
         self.logger.info(f'开始执行任务：{task_name}')
@@ -172,11 +173,8 @@ class TaskWorker(QThread):
     def class_task_answer(self):
         # 确保单元词表已加载(汉译英术语题依赖词表的 word_zh)
         if not self.public_info.word_list:
-            try:
-                get_unit_words(self.public_info)
-                handle_word_result(self.public_info)
-            except Exception as e:
-                self.logger.error(f"加载词表失败: {e}", exc_info = True)
+            get_unit_words(self.public_info)
+            handle_word_result(self.public_info)
         self.start_answering( )
     
     def start_answering(self):
@@ -206,25 +204,8 @@ class TaskWorker(QThread):
         self.logger.debug("处理words")
         handle_word_result(self.public_info)
         self.logger.debug("选择该单元所有单词")
-        exist_little_task = None
-        gwlr = self.public_info.get_word_list_result
-        if isinstance(gwlr, dict) and 'data' in gwlr:
-            data_field = gwlr['data']
-            if isinstance(data_field, dict):
-                exist_little_task = data_field.get('exist_little_task')
-            else:
-                try:
-                    if 'jv' in gwlr:
-                        decoded = debase64(data_field, gwlr.get('jv'))
-                        if isinstance(decoded, dict):
-                            exist_little_task = decoded.get('exist_little_task')
-                            self.public_info.get_word_list_result = decoded
-                except Exception as e:
-                    self.logger.error(f"解析 get_word_list_result 失败: {e}", exc_info = True)
+        exist_little_task = self.public_info.get_word_list_result.get('exist_little_task')
         if (progress < 2 and exist_little_task != 1) or exist_little_task == 2:
-            try:
-                select_all_word({f"{self.public_info.course_id}:{unit}": self.public_info.word_list},
-                                self.public_info.task_id)
-            except Exception as e:
-                self.logger.info("任务已经开启")
+            select_all_word({f"{self.public_info.course_id}:{unit}": self.public_info.word_list},
+                            self.public_info.task_id)
         self.start_answering( )

@@ -1,4 +1,5 @@
-import importlib.util
+from tests.module_loader import load_module
+
 import json
 import logging
 import sys
@@ -28,10 +29,8 @@ class PublicInfoTests(unittest.TestCase):
             config_path.write_text(json.dumps(config), encoding = 'utf-8')
             (data_dir / 'word_pool.json').write_text('{"含义": "word"}', encoding = 'utf-8')
             with patch.dict(sys.modules,
-                            {'easy_cidaren.logging.config': types.SimpleNamespace(Log = lambda name: logger)}):
-                spec = importlib.util.spec_from_file_location('test_public_info_module', path)
-                module = importlib.util.module_from_spec(spec)
-                spec.loader.exec_module(module)
+                            {'easy_cidaren.app_logging.config': types.SimpleNamespace(Log = lambda name: logger)}):
+                module = load_module('test_public_info_module', path)
                 with patch.object(module, 'DATA_DIR', data_dir), patch.object(module, 'RUNTIME_DIR', runtime_dir):
                     info = module.PublicInfo( )
                     self.assertEqual(info.word_dict, {'含义': 'word'})
@@ -52,10 +51,8 @@ class PublicInfoTests(unittest.TestCase):
         path = Path(__file__).resolve( ).parents[1] / 'easy_cidaren' / 'core' / 'public_info.py'
         with tempfile.TemporaryDirectory( ) as directory, \
                 patch.dict(sys.modules,
-                           {'easy_cidaren.logging.config': types.SimpleNamespace(Log = lambda name: logger)}):
-            spec = importlib.util.spec_from_file_location('test_public_info_first_run', path)
-            module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(module)
+                           {'easy_cidaren.app_logging.config': types.SimpleNamespace(Log = lambda name: logger)}):
+            module = load_module('test_public_info_first_run', path)
             runtime_dir = Path(directory) / 'runtime'
             with patch.object(module, 'DATA_DIR', Path(directory)), patch.object(module, 'RUNTIME_DIR', runtime_dir):
                 info = module.PublicInfo( )

@@ -1,10 +1,20 @@
 import unittest
 from datetime import datetime
+from types import SimpleNamespace
+from unittest.mock import patch
 
-from easy_cidaren.core.task_selection import batch_tasks, task_times, unavailable_reason
+from easy_cidaren.core.task_selection import batch_tasks, load_class_tasks, task_times, unavailable_reason
 
 
 class TaskSelectionTests(unittest.TestCase):
+    def test_failed_refresh_clears_old_tasks(self):
+        info = SimpleNamespace(task_list = ['old'], class_task = ['old'])
+        with patch('easy_cidaren.core.task_selection.get_class_task', side_effect = OSError('offline')):
+            with self.assertRaises(OSError):
+                load_class_tasks(info)
+        self.assertEqual(info.task_list, [])
+        self.assertEqual(info.class_task, [])
+
     def test_task_times_use_start_plus_duration_in_local_time(self):
         start = 1793604627860
         duration = 115172140
@@ -26,7 +36,7 @@ class TaskSelectionTests(unittest.TestCase):
     def test_completed_test_cannot_be_retried_but_learning_can(self):
         task = {'over_status': 2, 'progress': 100}
         self.assertIn('已完成', unavailable_reason(task, is_test = True))
-        self.assertIsNone(unavailable_reason(task, is_test = False))
+        self.assertIsNone(unavailable_reason(task))
     
     def test_batch_skips_unopened_and_completed_tasks(self):
         tasks = [
