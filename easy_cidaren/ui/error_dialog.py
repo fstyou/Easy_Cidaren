@@ -35,4 +35,4 @@ class ErrorDialog(QtWidgets.QDialog):
         except OSError as exc:
             show_warning(self, '无法打开日志', str(exc))
             return
-        show_warning(self, '无法打开日志', '请检查系统的文件管理器设置。')
+        show_warning(self, '无法打开日志', '请检查系统的文件管理器设置')

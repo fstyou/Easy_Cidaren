@@ -31,8 +31,8 @@ def _current_exam(public_info) -> dict:
 
 
 def _template_slots(content: str):
-    """mode 32 模板空位解析: 返回 (空位token列表, 总词位数)。
-    '_'=1 词位(接受连字符词整体, 如 low-carbon), '_-_'=2 词位(需拆分词 waste,free, 实证 165203)。
+    """mode 32 模板空位解析: 返回 (空位token列表, 总词位数)
+    '_'=1 词位(接受连字符词整体, 如 low-carbon), '_-_'=2 词位(需拆分词 waste,free, 实证 165203)
     用正则匹配空位 token(兼容标点粘连如 '_,'/'(_,)'), split() 只识别独立 token"""
     slots = []
     total = 0
@@ -402,7 +402,7 @@ def _candidate_words(public_info, remark):
 
 
 def _global_word_pool(public_info):
-    """全局词表单词池: 所有词条英文短语按 空白/连字符/括号/斜杠 拆分, 去重保序。
+    """全局词表单词池: 所有词条英文短语按 空白/连字符/括号/斜杠 拆分, 去重保序
     mode 73 前缀单词(如 utilization/conservation/transform)常存在于其他词条词表中,
     候选池按词条隔离用不到, 此池跨词条兜底"""
     word_map = getattr(public_info, 'word_dict', None) or {}

@@ -64,7 +64,7 @@ class MainWindowUi:
         self.label = QtWidgets.QLabel("账号登录")
         self.label.setObjectName("sectionTitle")
         account_layout.addWidget(self.label)
-        self.login_hint = QtWidgets.QLabel("请获取 Token 并登录，或输入已有的 Token。")
+        self.login_hint = QtWidgets.QLabel("请获取 Token 并登录，或输入已有的 Token")
         self.login_hint.setObjectName("loginHint")
         self.login_hint.setWordWrap(True)
         account_layout.addWidget(self.login_hint)

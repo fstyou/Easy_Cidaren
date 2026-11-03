@@ -110,10 +110,10 @@ class SettingsWindow(QtWidgets.QDialog):
     
     def save(self):
         if self.min_time.value( ) > self.max_time.value( ):
-            show_warning(self, '无法保存', '最长间隔不能短于最短间隔。')
+            show_warning(self, '无法保存', '最长间隔不能短于最短间隔')
             return
         if self.min_time_2.value( ) > self.max_time_2.value( ):
-            show_warning(self, '无法保存', '最长用时不能短于最短用时。')
+            show_warning(self, '无法保存', '最长用时不能短于最短用时')
             return
         compressed = self.br_checkBox.isChecked( )
         try:

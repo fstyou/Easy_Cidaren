@@ -1,5 +1,3 @@
-from tests.module_loader import load_module
-
 import json
 import logging
 import sys
@@ -8,6 +6,8 @@ import types
 import unittest
 from pathlib import Path
 from unittest.mock import patch
+
+from tests.module_loader import load_module
 
 
 class PublicInfoTests(unittest.TestCase):

@@ -1,9 +1,9 @@
 import base64
 import json
 import unittest
+from unittest.mock import patch
 
 from easy_cidaren.security.decode import debase64
-from unittest.mock import patch
 
 
 class DecodeTests(unittest.TestCase):

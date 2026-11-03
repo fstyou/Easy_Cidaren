@@ -1,10 +1,10 @@
-from tests.module_loader import load_module
-
 import sys
 import types
 import unittest
 from pathlib import Path
 from unittest.mock import patch
+
+from tests.module_loader import load_module
 
 
 class SessionTests(unittest.TestCase):

@@ -41,7 +41,7 @@ def setup_logger( ):
     logger_instance = logging.getLogger( )
     logger_instance.setLevel(logging.DEBUG)
     
-    # 只替换本项目的处理器，避免影响宿主或其他库的日志配置。
+    # 只替换本项目的处理器，避免影响宿主或其他库的日志配置
     for handler in logger_instance.handlers[:]:
         if handler.name in ('easy_cidaren.file', 'easy_cidaren.console'):
             logger_instance.removeHandler(handler)

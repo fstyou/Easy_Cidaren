@@ -1,6 +1,7 @@
 """Offscreen GUI smoke test, run on machines with working PyQt6."""
 import logging
 import sys
+import tempfile
 import threading
 from pathlib import Path
 from types import SimpleNamespace
@@ -11,15 +12,16 @@ from PyQt6.QtWidgets import QApplication, QFileDialog, QLabel, QMessageBox, QPus
 
 ROOT = Path(__file__).resolve( ).parents[1]
 sys.path.insert(0, str(ROOT))
-import main as application_entry
+from easy_cidaren.app import main as application_entry
 from easy_cidaren.ui.main_window import UiMainWindow
 from easy_cidaren.ui.token_dialog import CaptureProgressDialog
 from easy_cidaren.ui.dialogs import confirm_action, create_message, select_file
 from easy_cidaren.ui.settings import SettingsWindow
 from easy_cidaren.ui.about import AboutDialog
+from easy_cidaren.token_capture.service import TokenCaptureService
 
 app = QApplication([])
-assert callable(application_entry.main)
+assert callable(application_entry)
 message = create_message(None, '提示', '测试内容', QMessageBox.Icon.Information)
 assert message.button(QMessageBox.StandardButton.Ok).text( ) == '知道了'
 assert message.escapeButton( ) == message.button(QMessageBox.StandardButton.Ok)
@@ -107,7 +109,8 @@ def inspect_about(dialog):
     assert dialog.minimumHeight( ) == dialog.maximumHeight( )
     project_link = dialog.findChild(QLabel, 'projectLink')
     assert 'https://github.com/fstyou/Easy_Cidaren' in project_link.text( )
-    assert project_link.fontMetrics( ).horizontalAdvance('https://github.com/fstyou/Easy_Cidaren') <= project_link.contentsRect( ).width( )
+    assert project_link.fontMetrics( ).horizontalAdvance(
+        'https://github.com/fstyou/Easy_Cidaren') <= project_link.contentsRect( ).width( )
     assert project_link.alignment( ) & Qt.AlignmentFlag.AlignLeft
     with patch('easy_cidaren.ui.about.QtGui.QDesktopServices.openUrl', return_value = True) as open_url:
         project_link.linkActivated.emit('https://github.com/fstyou/Easy_Cidaren')
@@ -166,8 +169,9 @@ assert not window.ui.stop_task.isVisible( )
 unopened = {'task_name': '未开始的任务', 'over_status': 1, 'progress': 0,
             'start_time': 1793604627860, 'over_time': 115172140}
 available = {'task_name': '已开放的任务', 'over_status': 2, 'progress': 0}
+completed = {'task_name': '已完成的任务', 'over_status': 2, 'progress': 100}
 def fake_load_tasks(info):
-    info.task_list = [unopened, available]
+    info.task_list = [unopened, available, completed]
     return info.task_list
 
 # The event loop must remain responsive while a list request is pending.
@@ -208,8 +212,16 @@ with patch('easy_cidaren.ui.main_window.load_class_tasks', fake_load_tasks):
     app.processEvents( )
 unavailable_radio = window.ui.task_list.cellWidget(0, 0).findChild(QRadioButton)
 available_radio = window.ui.task_list.cellWidget(1, 0).findChild(QRadioButton)
+completed_radio = window.ui.task_list.cellWidget(2, 0).findChild(QRadioButton)
 assert not unavailable_radio.isEnabled( )
 assert available_radio.isEnabled( )
+assert not completed_radio.isEnabled( )
+completed_radio.click( )
+assert not completed_radio.isChecked( )
+assert not (window.ui.task_list.item(2, 1).flags( ) & Qt.ItemFlag.ItemIsSelectable)
+assert '已完成' in window.ui.task_list.item(2, 1).toolTip( )
+for column in range(1, 6):
+    assert window.ui.task_list.item(2, column).foreground( ).color( ).name( ) == '#196b4b'
 assert unavailable_radio.geometry( ).center( ).x( ) == available_radio.geometry( ).center( ).x( )
 unavailable_radio.click( )
 assert not unavailable_radio.isChecked( )
@@ -226,8 +238,9 @@ assert scrollbar.value( ) == scrollbar.maximum( )
 window.set_ui_enabled(True)
 assert available_radio.isEnabled( )
 assert not unavailable_radio.isEnabled( )
+assert not completed_radio.isEnabled( )
 assert window.ui.task_list.selectionMode( ) == QAbstractItemView.SelectionMode.SingleSelection
-window.ui.task_list.setRowCount(2)
+window.ui.task_list.setRowCount(3)
 assert not (window.ui.task_list.item(0, 1).flags( ) & Qt.ItemFlag.ItemIsSelectable)
 assert window.ui.task_list.item(0, 2).text( ) != '—'
 assert window.ui.task_list.item(0, 3).text( ) != '—'
@@ -344,8 +357,16 @@ dialog.open( )
 app.processEvents( )
 assert dialog.isVisible( )
 assert any('微信' in label.text( ) for label in dialog.findChildren(type(dialog.status_label)))
-dialog.show_status('请在目标客户端手动设置 HTTP/HTTPS 代理为 127.0.0.1:8888，结束后恢复原设置。')
-dialog.show_status('请在客户端信任 mitmproxy 证书：/tmp/test-cert.cer')
+dialog.show_status('在目标客户端手动设置 HTTP/HTTPS 代理为 127.0.0.1:8888，结束后恢复原设置')
+with tempfile.TemporaryDirectory( ) as directory:
+    cert = Path(directory) / '.mitmproxy' / 'mitmproxy-ca-cert.cer'
+    cert.parent.mkdir( )
+    cert.touch( )
+    service = TokenCaptureService(directory)
+    with patch('easy_cidaren.token_capture.service.Path.home', return_value = Path(directory)), \
+            patch('easy_cidaren.token_capture.service.sys.platform', 'darwin'):
+        service._ensure_mitm_cert_ready(dialog.show_status)
+    cert_path = str(cert)
 app.processEvents( )
 assert dialog.height( ) < 600
 assert dialog.maximumHeight( ) == dialog.height( )
@@ -353,8 +374,8 @@ assert dialog.subtitle_label.y( ) <= dialog.title_label.y( ) + dialog.title_labe
 assert dialog.instructions.y( ) <= dialog.subtitle_label.y( ) + dialog.subtitle_label.height( ) + 20
 steps = dialog.instructions.text( )
 assert '127.0.0.1:8888' in steps
-assert '/tmp/test-cert.cer' in steps
-assert steps.index('127.0.0.1:8888') < steps.index('/tmp/test-cert.cer') < steps.index('公众号')
+assert cert_path in steps
+assert steps.index('127.0.0.1:8888') < steps.index(cert_path) < steps.index('公众号')
 assert not hasattr(dialog, 'details')
 dialog.show_status('请在微信中打开词达人学生端，等待获取 token。')
 assert '等待获取' in dialog.status_label.text( )

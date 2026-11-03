@@ -39,17 +39,16 @@ def task_times(task):
     return format_time(start), format_time(deadline)
 
 
-def unavailable_reason(task, *, is_test = False):
+def unavailable_reason(task):
     if task.get('over_status') == 1:
-        return '任务尚未开始，请在开始时间后再试。'
-    if is_test and task.get('progress', 0) >= 100:
-        return '已完成的测试任务不能重新执行。'
+        return '任务尚未开始，请在开始时间后再试'
+    if task.get('progress', 0) >= 100:
+        return '已完成的任务不能重新执行'
     return None
 
 
-def batch_tasks(tasks, *, is_test = False):
-    return [task for task in tasks
-            if task.get('progress', 0) < 100 and not unavailable_reason(task, is_test = is_test)]
+def batch_tasks(tasks):
+    return [task for task in tasks if not unavailable_reason(task)]
 
 
 def get_all_task(public_info):

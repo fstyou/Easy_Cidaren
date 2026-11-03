@@ -1,4 +1,4 @@
-"""Token 捕获后端服务。"""
+"""Token 捕获后端服务"""
 import os
 import socket
 import subprocess
@@ -13,6 +13,8 @@ from easy_cidaren.token_capture.token_store import SAVED_TOKEN_FILE
 from easy_cidaren.utils.executables import find_mitmdump
 
 service_logger = Log("token_capture_service").logger
+MANUAL_PROXY_PREFIX = '在目标客户端手动设置'
+CERT_TRUST_PREFIX = '在客户端信任 mitmproxy 证书：'
 
 
 class TokenCaptureService:
@@ -54,7 +56,7 @@ class TokenCaptureService:
             self.proxy_manager = ProxyManager( )
             
             # 检查 mitmdump 是否可用
-            mitmdump = find_mitmdump( )
+            mitmdump = sys.executable if getattr(sys, 'frozen', False) else find_mitmdump( )
             if not mitmdump:
                 raise RuntimeError("mitmdump 未找到，请先安装 mitmproxy: pip install mitmproxy")
             
@@ -79,7 +81,7 @@ class TokenCaptureService:
                 return None
             if status_callback:
                 if sys.platform.startswith("linux"):
-                    status_callback("请在目标客户端手动设置 HTTP/HTTPS 代理为 127.0.0.1:8888，结束后恢复原设置。")
+                    status_callback(f"{MANUAL_PROXY_PREFIX} HTTP/HTTPS 代理为 127.0.0.1:8888，结束后恢复原设置")
             
             # 启动 mitmdump
             startupinfo = None
@@ -93,6 +95,7 @@ class TokenCaptureService:
             self.mitm_process = subprocess.Popen(
                     [
                         mitmdump,
+                        *(['--internal-mitmdump'] if getattr(sys, 'frozen', False) else []),
                         "-s", addon_path,
                         "--listen-host", "127.0.0.1",
                         "--listen-port", "8888",
@@ -108,11 +111,13 @@ class TokenCaptureService:
             
             # 等待 mitmproxy 证书生成并自动导入（首次运行必需）
             self._ensure_mitm_cert_ready(status_callback)
+            if self._stop_requested.is_set( ):
+                return None
             
             if status_callback:
-                status_callback("请在微信中打开词达人学生端，等待获取 token。")
+                status_callback("请在微信中打开词达人学生端，等待获取 token")
             
-            # 只处理本次捕获更新的文件。
+            # 只处理本次捕获更新的文件
             while True:
                 # 检查是否被用户停止
                 if self._stop_requested.is_set( ):
@@ -177,13 +182,11 @@ class TokenCaptureService:
             if cert_path.exists( ):
                 break
             if self.mitm_process.poll( ) is not None:
-                service_logger.error("mitmproxy 在生成证书前已退出")
-                return
+                raise RuntimeError("mitmproxy 在生成证书前已退出")
             time.sleep(0.5)
         
         if not cert_path.exists( ):
-            service_logger.warning(f"等待证书生成超时: {cert_path}")
-            return
+            raise RuntimeError(f"等待 mitmproxy 证书生成超时：{cert_path}")
         
         service_logger.info(f"mitmproxy 证书已生成: {cert_path}")
         
@@ -197,7 +200,7 @@ class TokenCaptureService:
         elif sys.platform != "win32":
             service_logger.info("非 Windows 系统，请手动信任 mitmproxy 证书")
             if status_callback:
-                status_callback(f"请在客户端信任 mitmproxy 证书：{cert_path}")
+                status_callback(f"{CERT_TRUST_PREFIX}{cert_path}")
     
     def cleanup(self, status_callback = None):
         """清理资源（线程安全，可重复调用，只执行一次）"""
@@ -223,7 +226,7 @@ class TokenCaptureService:
         except Exception as e:
             service_logger.error(f"停止 mitmproxy 失败: {e}")
             if status_callback:
-                status_callback("⛔ 无法停止 token 代理进程，请检查并手动关闭。")
+                status_callback("⛔ 无法停止 token 代理进程，请检查并手动关闭")
         
         try:
             if self.proxy_manager:
@@ -232,11 +235,11 @@ class TokenCaptureService:
                 service_logger.info("系统代理已恢复")
                 if status_callback:
                     if sys.platform.startswith('linux'):
-                        status_callback("请恢复目标客户端中手动设置的代理。")
+                        status_callback("请恢复刚刚手动设置的代理")
         except Exception as e:
             service_logger.error(f"恢复系统代理失败: {e}")
             if status_callback:
-                status_callback("⛔ 代理设置恢复失败，请检查系统代理设置。")
+                status_callback("⛔ 代理设置恢复失败，请检查系统代理设置")
     
     def stop(self):
         """停止捕获"""

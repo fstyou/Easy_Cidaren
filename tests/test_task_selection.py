@@ -26,17 +26,15 @@ class TaskSelectionTests(unittest.TestCase):
         self.assertEqual(task_times({'start_time': 10 ** 30, 'over_time': 1}), ('—', '—'))
     
     def test_not_yet_open_task_is_unavailable_for_both_types(self):
-        for is_test in (False, True):
-            self.assertIn('尚未开始', unavailable_reason(
-                    {'over_status': 1, 'progress': 0}, is_test = is_test))
+        self.assertIn('尚未开始', unavailable_reason({'over_status': 1, 'progress': 0}))
     
     def test_open_task_with_zero_progress_is_available(self):
         self.assertIsNone(unavailable_reason({'over_status': 2, 'progress': 0}))
     
-    def test_completed_test_cannot_be_retried_but_learning_can(self):
-        task = {'over_status': 2, 'progress': 100}
-        self.assertIn('已完成', unavailable_reason(task, is_test = True))
-        self.assertIsNone(unavailable_reason(task))
+    def test_completed_tasks_cannot_be_retried(self):
+        for task_type in (1, 2):
+            task = {'over_status': 2, 'progress': 100, 'task_type': task_type}
+            self.assertIn('已完成', unavailable_reason(task))
     
     def test_batch_skips_unopened_and_completed_tasks(self):
         tasks = [

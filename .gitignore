@@ -42,7 +42,11 @@ coverage.xml
 *.py,cover
 
 # Python builds and packaging
-build/
+/build/*
+!/build/build.py
+!/build/windows.iss
+!/build/requirements.txt
+!/build/README.md
 dist/
 *.egg-info/
 *.egg

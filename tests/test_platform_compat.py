@@ -1,5 +1,3 @@
-from tests.module_loader import load_module
-
 import os
 import sys
 import tempfile
@@ -7,6 +5,8 @@ import types
 import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
+
+from tests.module_loader import load_module
 
 ROOT = Path(__file__).resolve( ).parents[1]
 sys.path.insert(0, str(ROOT))
@@ -21,6 +21,20 @@ class FakeLog:
 
 
 class PlatformCompatibilityTests(unittest.TestCase):
+    def test_certificate_startup_failure_is_reported(self):
+        from easy_cidaren.token_capture.service import TokenCaptureService
+        with tempfile.TemporaryDirectory( ) as directory:
+            service = TokenCaptureService(directory)
+            service.mitm_process = Mock( )
+            service.mitm_process.poll.return_value = 1
+            with patch('easy_cidaren.token_capture.service.Path.home', return_value = Path(directory)):
+                with self.assertRaisesRegex(RuntimeError, '生成证书前已退出'):
+                    service._ensure_mitm_cert_ready( )
+                service.mitm_process.poll.return_value = None
+                with patch('easy_cidaren.token_capture.service.time.time', side_effect = [0, 16]):
+                    with self.assertRaisesRegex(RuntimeError, '证书生成超时'):
+                        service._ensure_mitm_cert_ready( )
+
     def test_answer_library_does_not_depend_on_working_directory(self):
         from easy_cidaren.paths import DATA_DIR
         with tempfile.TemporaryDirectory( ) as directory:

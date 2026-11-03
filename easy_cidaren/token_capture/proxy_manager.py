@@ -118,7 +118,7 @@ class ProxyManager:
             import ctypes
             INTERNET_OPTION_SETTINGS_CHANGED = 39
             INTERNET_OPTION_REFRESH = 37
-            internet_set_option = ctypes.windll.Wininet.InternetSetOptionW
+            internet_set_option = getattr(ctypes.windll.Wininet, 'InternetSetOptionW')
             internet_set_option(0, INTERNET_OPTION_SETTINGS_CHANGED, 0, 0)
             internet_set_option(0, INTERNET_OPTION_REFRESH, 0, 0)
             
@@ -209,14 +209,13 @@ class ProxyManager:
             proxy_server = f"{host}:{port}"
             if not self._set_windows_proxy_settings(
                     enabled = True,
-                    server = proxy_server,
-                    override = "<local>"
+                    server = proxy_server
             ):
                 raise RuntimeError("无法设置 Windows 系统代理")
             proxy_logger.logger.info(f"已设置系统代理: {proxy_server}")
         
         elif self.os == "Linux":
-            # 进程环境变量不会影响已经运行的微信或其他客户端。
+            # 进程环境变量不会影响已经运行的微信或其他客户端
             proxy_logger.logger.info(f"请在目标客户端手动设置代理 {host}:{port}")
     
     def disable_proxy(self):

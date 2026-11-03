@@ -1,0 +1,117 @@
+name: Build packages
+
+on:
+    workflow_dispatch:
+    push:
+        tags:
+            - 'v*'
+
+permissions:
+    contents: read
+
+jobs:
+    package:
+        name: ${{ matrix.name }}
+        runs-on: ${{ matrix.runner }}
+        strategy:
+            fail-fast: false
+            matrix:
+                include:
+                    -
+                        name: Windows x64
+                        runner: windows-2025
+                        target: windows
+                        artifact: windows-x64
+                        files: build/output/*_windows_x64.exe
+                    # Windows ARM64 is reserved, but disabled until its native dependencies
+                    # and the ARM64 runner have been verified; see build/README.md.
+                    # - name: Windows ARM64
+                    #   runner: windows-11-arm
+                    #   target: windows
+                    #   artifact: windows-arm64
+                    #   files: build/output/*_windows_arm64.exe
+                    -
+                        name: macOS Apple Silicon
+                        runner: macos-15
+                        target: macos
+                        artifact: macos-arm64
+                        files: build/output/*.dmg
+                    -
+                        name: macOS Intel
+                        runner: macos-15-intel
+                        target: macos
+                        artifact: macos-x64
+                        files: build/output/*.dmg
+                    -
+                        name: Linux x64
+                        runner: ubuntu-24.04
+                        target: linux
+                        artifact: linux-x64
+                        files: |
+                            build/output/*.deb
+                            build/output/*.rpm
+                    -
+                        name: Linux ARM64
+                        runner: ubuntu-24.04-arm
+                        target: linux
+                        artifact: linux-arm64
+                        files: |
+                            build/output/*.deb
+                            build/output/*.rpm
+        steps:
+            -
+                uses: actions/checkout@v4
+            -
+                uses: actions/setup-python@v5
+                with:
+                    python-version: '3.12'
+                    architecture: ${{ runner.arch == 'ARM64' && 'arm64' || 'x64' }}
+            -
+                name: Install Linux build tools and Qt libraries
+                if: runner.os == 'Linux'
+                run: sudo apt-get update && sudo apt-get install -y ruby ruby-dev build-essential rpm libegl1 libgl1 libglib2.0-0
+            -
+                name: Install fpm
+                if: runner.os == 'Linux'
+                run: sudo gem install fpm --no-document
+            -
+                name: Locate Inno Setup
+                if: runner.os == 'Windows'
+                shell: pwsh
+                run: |
+                    $compiler = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'
+                    if (!(Test-Path $compiler)) { throw "Inno Setup 6 not found: $compiler" }
+                    Split-Path $compiler | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+            -
+                name: Install Python dependencies
+                run: python -m pip install -r requirements.txt -r build/requirements.txt
+            -
+                name: Check dependencies and run unit tests
+                run: |
+                    python -m pip check
+                    python -m unittest discover -s tests -v
+            -
+                name: Check GUI and language model
+                env:
+                    QT_QPA_PLATFORM: offscreen
+                    PYTHONFAULTHANDLER: '1'
+                run: |
+                    python -u tests/gui_smoke.py
+                    python -c "from PyQt6.QtWidgets import QApplication; import spacy; from easy_cidaren.paths import MODEL_DIR; app = QApplication([]); spacy.load(MODEL_DIR)"
+            -
+                name: Build packages
+                run: python build/build.py ${{ matrix.target }}
+            -
+                name: Inspect Linux package metadata
+                if: runner.os == 'Linux'
+                run: |
+                    dpkg-deb --info build/output/*.deb
+                    rpm -qip build/output/*.rpm
+            -
+                name: Upload packages
+                uses: actions/upload-artifact@v4
+                with:
+                    name: ${{ matrix.artifact }}
+                    path: ${{ matrix.files }}
+                    if-no-files-found: error
+                    retention-days: 14

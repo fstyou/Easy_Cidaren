@@ -45,7 +45,7 @@ class UiMainWindow(QMainWindow):
         previous_token = load_token( )
         if previous_token:
             self.ui.token_input.setText(previous_token)
-            self.ui.login_hint.setText("已读取上次获取的 Token，请点击登录。")
+            self.ui.login_hint.setText("已读取上次获取的 Token，请点击登录")
         self._apply_window_limits( )
 
 
@@ -197,7 +197,7 @@ class UiMainWindow(QMainWindow):
             return
         self.token = self.ui.token_input.text( ).split('\n')[0].strip( )
         if not self.token:
-            show_warning(self, '登录失败', '请输入 Token。')
+            show_warning(self, '登录失败', '请输入 Token')
             return
         self.set_logged_in(False)
         self.ui.user_info.clear( )
@@ -216,7 +216,7 @@ class UiMainWindow(QMainWindow):
             self.main_logger.error('登录失败：%s', result, exc_info = (type(result), result, result.__traceback__))
             result = 7
         if not isinstance(result, dict):
-            errors = {1: 'Token 已过期，请重新获取。', 2: 'HTTP 请求失败。',
+            errors = {1: 'Token 已过期，请重新获取', 2: 'HTTP 请求失败',
                       3: '连接超时', 4: '响应格式错误', 5: 'SSL 连接错误',
                       6: '代理连接错误', 7: '网络连接错误'}
             message = errors.get(result, '服务端响应异常') if isinstance(result, int) else '服务端响应异常'
@@ -230,7 +230,7 @@ class UiMainWindow(QMainWindow):
         except (KeyError, TypeError, AttributeError, ValueError):
             self.ui.warn_info.setText('')
             self.ui.warn_info.hide( )
-            show_warning(self, '登录失败', '服务端返回的用户信息不完整。')
+            show_warning(self, '登录失败', '服务端返回的用户信息不完整')
             return
         self.ui.warn_info.setText('')
         self.ui.warn_info.hide( )
@@ -270,7 +270,7 @@ class UiMainWindow(QMainWindow):
             show_warning(self, "获取任务列表失败", str(result))
             return
         if not result:
-            show_information(self, "任务列表", "当前没有任务。")
+            show_information(self, "任务列表", "当前没有任务")
             return
         try:
             self.render_task_list( )
@@ -278,7 +278,7 @@ class UiMainWindow(QMainWindow):
             self.main_logger.error('任务列表格式错误：%s', exc)
             self.public_info.task_list = []
             self.ui.task_list.setRowCount(0)
-            show_warning(self, '任务列表格式错误', '服务端返回的任务信息不完整，请稍后重试。')
+            show_warning(self, '任务列表格式错误', '服务端返回的任务信息不完整，请稍后重试')
 
     def render_task_list(self):
         for task in self.public_info.task_list:
@@ -298,7 +298,7 @@ class UiMainWindow(QMainWindow):
             radio_layout.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
             radio_layout.addWidget(radio)
             self.ui.task_list.setCellWidget(row, 0, radio_container)
-            reason = unavailable_reason(task, is_test = self.ui.test_task.isChecked( ))
+            reason = unavailable_reason(task)
             if reason:
                 radio.setEnabled(False)
                 radio.setToolTip(reason)
@@ -307,16 +307,15 @@ class UiMainWindow(QMainWindow):
             if over_status == 1:
                 score_text += " (未开始)"
             start_time, end_time = task_times(task)
-            # 每个数据单元格都保存任务，以支持点击任意列选择。
+            # 每个数据单元格都保存任务，以支持点击任意列选择
             for col, text in enumerate([task_name, start_time, end_time, f"{progress}%", score_text],
                                        start = 1):
                 cell = QtWidgets.QTableWidgetItem(text)
                 cell.setData(QtCore.Qt.ItemDataRole.UserRole, task)
-                # 已完成的任务显示绿色
-                if reason:
-                    cell.setForeground(QtGui.QColor("#65758a"))
-                elif progress >= 100:
+                if progress >= 100:
                     cell.setForeground(QtGui.QColor("#196b4b"))
+                elif reason:
+                    cell.setForeground(QtGui.QColor("#65758a"))
                 if reason:
                     cell.setToolTip(reason)
                     cell.setFlags(cell.flags( ) & ~QtCore.Qt.ItemFlag.ItemIsSelectable)
@@ -339,8 +338,7 @@ class UiMainWindow(QMainWindow):
         if self.ui.task_list.selectionMode( ) == QtWidgets.QAbstractItemView.SelectionMode.NoSelection:
             return
         item = self.ui.task_list.item(row, 1)
-        if item and not unavailable_reason(item.data(QtCore.Qt.ItemDataRole.UserRole),
-                                           is_test = self.ui.test_task.isChecked( )):
+        if item and not unavailable_reason(item.data(QtCore.Qt.ItemDataRole.UserRole)):
             self.ui.task_list.setCurrentItem(item)
 
     def on_task_item_clicked(self, item):
@@ -353,7 +351,7 @@ class UiMainWindow(QMainWindow):
             return
         try:
             task = item.data(QtCore.Qt.ItemDataRole.UserRole)
-            if task and unavailable_reason(task, is_test = self.ui.test_task.isChecked( )):
+            if task and unavailable_reason(task):
                 return
             row = item.row( )
             widget = self.ui.task_list.cellWidget(row, 0)
@@ -366,7 +364,7 @@ class UiMainWindow(QMainWindow):
     def confirm_task_start(self, details):
         return confirm_action(
                 self, "确认开始", details, confirm_text = "开始", default_confirm = True,
-                detail = "运行期间请保持程序打开。",
+                detail = "运行期间请保持程序打开",
         )
 
     def _start_worker(self, tasks, *, batch_mode):
@@ -398,7 +396,7 @@ class UiMainWindow(QMainWindow):
                 else:
                     self.main_logger.info("开始班级测试任务")
                 task_info = current_item.data(QtCore.Qt.ItemDataRole.UserRole)
-                reason = unavailable_reason(task_info, is_test = self.ui.test_task.isChecked( ))
+                reason = unavailable_reason(task_info)
                 if reason:
                     show_warning(self, "无法开始任务", reason)
                     return
@@ -407,7 +405,7 @@ class UiMainWindow(QMainWindow):
                     self.public_info.class_task = [task_info]
                     self._start_worker([task_info], batch_mode = False)
             else:
-                show_information(self, "无法开始任务", "请先登录并选择要执行的任务。")
+                show_information(self, "无法开始任务", "请先登录并选择要执行的任务")
         except Exception as e:
             self.main_logger.error(f"运行出错，错误信息：{e}")
             self._hide_task_progress( )
@@ -418,11 +416,11 @@ class UiMainWindow(QMainWindow):
         """一键刷题：按顺序自动执行列表中所有未完成的任务"""
         try:
             if not self._logged_in:
-                show_information(self, "无法开始刷题", "请先登录，再使用一键刷题。")
+                show_information(self, "无法开始刷题", "请先登录，再使用一键刷题")
                 return
-            tasks = batch_tasks(self.public_info.task_list, is_test = self.ui.test_task.isChecked( ))
+            tasks = batch_tasks(self.public_info.task_list)
             if not tasks:
-                show_information(self, "没有可执行的任务", "当前没有已开始且未完成的任务。")
+                show_information(self, "没有可执行的任务", "当前没有已开始且未完成的任务")
                 return
             skipped = len(self.public_info.task_list) - len(tasks)
             details = f"开始按顺序执行 {len(tasks)} 个未完成任务？"
@@ -471,7 +469,7 @@ class UiMainWindow(QMainWindow):
         """
         self.main_logger.info(f'{message}')
         if self._batch_mode:
-            # 批量模式：记录结果，全部结束后再刷新任务列表。
+            # 批量模式：记录结果，全部结束后再刷新任务列表
             self.show_task_progress("正在准备下一个任务…")
             return
         self.set_ui_enabled(True)
@@ -526,7 +524,7 @@ class UiMainWindow(QMainWindow):
     def open_readme(self):
         url = QtCore.QUrl("https://github.com/fstyou/Easy_Cidaren#readme")
         if not QtGui.QDesktopServices.openUrl(url):
-            show_warning(self, "无法打开帮助", "无法打开浏览器，请检查系统默认浏览器设置。")
+            show_warning(self, "无法打开帮助", "无法打开浏览器，请检查系统默认浏览器设置")
 
     def open_settings(self, _action = None):
         if self.settings is not None and self.settings.isVisible( ):
@@ -656,7 +654,7 @@ class UiMainWindow(QMainWindow):
             item = self.ui.task_list.item(row, 1)
             if isinstance(radio, QtWidgets.QRadioButton) and item is not None:
                 task = item.data(QtCore.Qt.ItemDataRole.UserRole)
-                radio.setEnabled(enabled and not unavailable_reason(task, is_test = self.ui.test_task.isChecked( )))
+                radio.setEnabled(enabled and not unavailable_reason(task))
         self.ui.start_task.setEnabled(enabled)
         self.ui.batch_start.setEnabled(enabled)
         self.ui.settings_button.setEnabled(enabled)

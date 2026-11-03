@@ -63,4 +63,4 @@ class AboutDialog(QtWidgets.QDialog):
     
     def open_url(self, address):
         if not QtGui.QDesktopServices.openUrl(QtCore.QUrl(address)):
-            show_warning(self, '无法打开网页', '请检查系统默认浏览器设置。')
+            show_warning(self, '无法打开网页', '请检查系统默认浏览器设置')

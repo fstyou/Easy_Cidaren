@@ -1,6 +1,7 @@
 spacy==3.7.2
 numpy<2
-PyQt6==6.7.0
+PyQt6==6.7.0; sys_platform != 'linux' or platform_machine != 'aarch64'
+PyQt6==6.12.0; sys_platform == 'linux' and platform_machine == 'aarch64'
 Requests==2.32.2
 Brotli==1.1.0
 mitmproxy==12.2.0

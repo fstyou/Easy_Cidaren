@@ -5,7 +5,7 @@ from PyQt6.QtCore import QThread, pyqtSignal
 from PyQt6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton
 
 from easy_cidaren.app_logging.config import Log
-from easy_cidaren.token_capture.service import TokenCaptureService
+from easy_cidaren.token_capture.service import CERT_TRUST_PREFIX, MANUAL_PROXY_PREFIX, TokenCaptureService
 
 dialog_logger = Log("builtin_token").logger
 
@@ -75,7 +75,7 @@ class CaptureProgressDialog(QDialog):
         self.title_label = QLabel("获取登录 Token")
         self.title_label.setObjectName("captureTitle")
         layout.addWidget(self.title_label)
-        self.subtitle_label = QLabel("按以下步骤操作，获取成功后将自动登录。")
+        self.subtitle_label = QLabel("按以下步骤操作，获取成功后将自动登录")
         self.subtitle_label.setObjectName("captureSubtitle")
         self.subtitle_label.setWordWrap(True)
         layout.addWidget(self.subtitle_label)
@@ -140,11 +140,11 @@ class CaptureProgressDialog(QDialog):
         self.setFixedHeight(height)
     
     def _render_steps(self):
-        steps = ["打开电脑微信并登录。"]
+        steps = ["打开电脑微信并登录"]
         steps.extend(self._setup_steps[key] for key in sorted(self._setup_steps))
         steps.extend([
             "在微信中进入“词达人”公众号的学生端，或在任意聊天发送并打开 https://app.vocabgo.com/student/",
-            "在学生端浏览几个页面，等待自动获取。",
+            "在学生端浏览几个页面，等待自动获取",
         ])
         self.instructions.setText('<ol>' + ''.join(
                 f'<li style="margin-bottom: 8px;">{html.escape(step)}</li>' for step in steps
@@ -153,11 +153,11 @@ class CaptureProgressDialog(QDialog):
     def show_status(self, message):
         if message.startswith("请在微信中打开"):
             self.status_label.setText("等待获取 Token…")
-        elif message.startswith("请在目标客户端手动设置"):
+        elif message.startswith(MANUAL_PROXY_PREFIX):
             self._setup_steps[0] = message
             self._render_steps( )
             QtCore.QTimer.singleShot(0, self._fit_content)
-        elif message.startswith("请在客户端信任"):
+        elif message.startswith(CERT_TRUST_PREFIX):
             self._setup_steps[1] = message
             self._render_steps( )
             QtCore.QTimer.singleShot(0, self._fit_content)
