@@ -157,10 +157,10 @@ def linux( ):
 class ChineseArgumentParser(argparse.ArgumentParser):
     def format_usage(self):
         return super( ).format_usage( ).replace('usage:', '用法：', 1)
-
+    
     def format_help(self):
         return super( ).format_help( ).replace('usage:', '用法：', 1)
-
+    
     def error(self, message) -> NoReturn:
         if message.startswith('unrecognized arguments:'):
             message = message.replace('unrecognized arguments:', '无法识别的参数：', 1)

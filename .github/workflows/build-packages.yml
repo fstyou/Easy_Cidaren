@@ -13,6 +13,8 @@ jobs:
     package:
         name: ${{ matrix.name }}
         runs-on: ${{ matrix.runner }}
+        env:
+            PYTHONUTF8: '1'
         strategy:
             fail-fast: false
             matrix:
@@ -69,7 +71,7 @@ jobs:
             -
                 name: Install Linux build tools and Qt libraries
                 if: runner.os == 'Linux'
-                run: sudo apt-get update && sudo apt-get install -y ruby ruby-dev build-essential rpm libegl1 libgl1 libglib2.0-0
+                run: sudo apt-get update && sudo apt-get install -y ruby ruby-dev build-essential rpm libegl1 libgl1 libglib2.0-0 libpulse0
             -
                 name: Install fpm
                 if: runner.os == 'Linux'

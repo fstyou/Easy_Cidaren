@@ -6,12 +6,13 @@ import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
 
+from tests import PROJECT_ROOT
 from tests.module_loader import load_module
 
 
 class WordListTests(unittest.TestCase):
     def test_word_pool_is_written_to_data_directory(self):
-        path = Path(__file__).resolve( ).parents[1] / 'easy_cidaren' / 'core' / 'word_list.py'
+        path = PROJECT_ROOT / 'easy_cidaren' / 'core' / 'word_list.py'
         with tempfile.TemporaryDirectory( ) as directory:
             data_dir = Path(directory) / 'data'
             data_dir.mkdir( )
@@ -26,7 +27,7 @@ class WordListTests(unittest.TestCase):
             saved = json.loads((data_dir / 'word_pool.json').read_text(encoding = 'utf-8'))
             self.assertEqual(saved, {'原有': 'existing', '含义': 'word'})
             self.assertEqual(info.word_list, ['word'])
-
+    
     def test_encoded_word_response_is_decoded_only_once(self):
         from easy_cidaren.core.word_list import decode_word_result
         decoded = {'word_list': [], 'exist_little_task': 2}
@@ -35,7 +36,7 @@ class WordListTests(unittest.TestCase):
             self.assertIs(decode_word_result(info), decoded)
             self.assertIs(decode_word_result(info), decoded)
             decode.assert_called_once_with('encoded', '2_test')
-
+    
     def test_invalid_word_response_is_reported(self):
         from easy_cidaren.core.word_list import decode_word_result
         info = types.SimpleNamespace(get_word_list_result = {'data': {'word_list': None}})

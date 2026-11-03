@@ -6,12 +6,13 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from tests import PROJECT_ROOT
 from tests.module_loader import load_module
 
 
 class CaptureAddonTests(unittest.TestCase):
     def test_only_target_token_is_written_without_capture_log(self):
-        path = Path(__file__).resolve( ).parents[1] / 'easy_cidaren' / 'token_capture' / 'addon.py'
+        path = PROJECT_ROOT / 'easy_cidaren' / 'token_capture' / 'addon.py'
         http = types.SimpleNamespace(HTTPFlow = object)
         with tempfile.TemporaryDirectory( ) as directory, \
                 patch.dict(os.environ, {'EASY_CIDAREN_TOKEN_FILE': str(Path(directory) / 'last_token.txt')}), \

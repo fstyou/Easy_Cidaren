@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 
 class MainWindowUi:
     """Own the controls constructed for the main window."""
-
+    
     def __init__(self, window: "UiMainWindow"):
         MainWindow = window
         MainWindow.setObjectName("MainWindow")
@@ -34,7 +34,7 @@ class MainWindowUi:
         page.setSizeConstraint(QtWidgets.QLayout.SizeConstraint.SetMinimumSize)
         page.setContentsMargins(20, 16, 20, 16)
         page.setSpacing(12)
-
+        
         title = QtWidgets.QLabel("Easy Cidaren")
         title.setObjectName("pageTitle")
         header = QtWidgets.QHBoxLayout( )
@@ -53,7 +53,7 @@ class MainWindowUi:
         self.about_button.clicked.connect(window.show_about)
         header.addWidget(self.about_button)
         page.addLayout(header)
-
+        
         self.account_card = QtWidgets.QFrame( )
         self.account_card.setObjectName("card")
         self.account_card.setSizePolicy(QtWidgets.QSizePolicy.Policy.Preferred,
@@ -90,7 +90,7 @@ class MainWindowUi:
         self.user_info.hide( )
         account_layout.addWidget(self.user_info)
         page.addWidget(self.account_card)
-
+        
         content = QtWidgets.QVBoxLayout( )
         content.setSpacing(12)
         page.addLayout(content, 1)
@@ -158,7 +158,7 @@ class MainWindowUi:
         task_layout.addLayout(actions)
         content.addWidget(self.task_card, 1)
         self.task_card.hide( )
-
+        
         self.progress_card = QtWidgets.QFrame( )
         self.progress_card.setObjectName("card")
         self.progress_card.setSizePolicy(QtWidgets.QSizePolicy.Policy.Preferred,

@@ -2,9 +2,9 @@ import logging
 import sys
 import types
 import unittest
-from pathlib import Path
 from unittest.mock import Mock, patch
 
+from tests import PROJECT_ROOT
 from tests.module_loader import load_module
 
 
@@ -19,7 +19,7 @@ class WordRevertTests(unittest.TestCase):
             'easy_cidaren.api.courses': types.SimpleNamespace(use_api_get_prototype = fallback),
             'easy_cidaren.app_logging.config': types.SimpleNamespace(Log = lambda name: logger),
         }
-        path = Path(__file__).resolve( ).parents[1] / 'easy_cidaren' / 'utils' / 'word_revert.py'
+        path = PROJECT_ROOT / 'easy_cidaren' / 'utils' / 'word_revert.py'
         with patch.dict(sys.modules, modules):
             module = load_module('test_word_revert_module', path)
             self.assertEqual(module.word_revert('ONE'), 'one')

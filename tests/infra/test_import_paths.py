@@ -1,12 +1,13 @@
 import subprocess
 import sys
 import unittest
-from pathlib import Path
+
+from tests import PROJECT_ROOT
 
 
 class ImportPathTests(unittest.TestCase):
     def test_source_root_does_not_shadow_standard_logging(self):
-        root = Path(__file__).resolve( ).parents[1]
+        root = PROJECT_ROOT
         code = (
             'import sys; '
             f'sys.path.insert(0, {str(root / "easy_cidaren")!r}); '

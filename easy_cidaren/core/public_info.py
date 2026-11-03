@@ -23,7 +23,7 @@ DEFAULT_SETTINGS = {
 class PublicInfo:
     task_type: str
     task_type_int: int
-
+    
     def __init__(self):
         self.get_word_list_result = {}
         RUNTIME_DIR.mkdir(parents = True, exist_ok = True)
@@ -46,7 +46,7 @@ class PublicInfo:
             # 自学习开关(独立控制两个记忆库的写入; 关闭只停写入, 读取不受影响)
             self._self_learn_lib = user_config['self_learn_lib']
             self._self_learn_pool = user_config['self_learn_pool']
-
+        
         # 任务列表
         self.task_list = ""
         # 答题对错计数(供进度条右侧统计显示)
@@ -91,72 +91,72 @@ class PublicInfo:
         self.source_option = []
         pub_info = Log("public_info")
         pub_info.logger.info("公共组件初始化成功")
-
+    
     @property
     # only read
     def topic_code(self):
         return self._topic_code
-
+    
     @topic_code.setter
     # only write
     def topic_code(self, value):
         self._topic_code = value
-
+    
     @property
     def task_type_choices(self):
         return self._task_choices
-
+    
     @property
     def min_time(self) -> int:
         return self._min_time
-
+    
     @property
     def max_time(self) -> int:
         return self._max_time
-
+    
     @property
     def spend_min_time(self) -> int:
         return self._spend_min_time
-
+    
     @property
     def spend_max_time(self) -> int:
         return self._spend_max_time
-
+    
     @property
     def accept_encoding(self) -> str:
         return self._headers_accept_encoding
-
+    
     @property
     def br_choices(self) -> bool:
         return self._br_choices
-
+    
     @property
     def play_music(self) -> bool:
         return self._play_music
-
+    
     @property
     def music_path(self) -> str:
         return self._music_path
-
+    
     @property
     def version(self) -> str:
         return __version__
-
+    
     @property
     def self_learn_lib(self) -> bool:
         return self._self_learn_lib
-
+    
     @property
     def self_learn_pool(self) -> bool:
         return self._self_learn_pool
-
+    
     @staticmethod
     def _update_config(changes):
         with open(RUNTIME_DIR / 'settings.json', encoding = 'utf-8') as f:
             data = json.load(f)
         data.update(changes)
         write_json(RUNTIME_DIR / 'settings.json', data, indent = 2)
-
+    
     def input_info(self, min_time, max_time, min_time_2, max_time_2, br_choices, accept_encoding, play_music,
                    music_path):
         self._update_config({

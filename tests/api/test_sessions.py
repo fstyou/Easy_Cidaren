@@ -1,19 +1,19 @@
 import sys
 import types
 import unittest
-from pathlib import Path
 from unittest.mock import patch
 
+from tests import PROJECT_ROOT
 from tests.module_loader import load_module
 
 
 class SessionTests(unittest.TestCase):
     def test_uninitialized_session_rejects_requests(self):
         from easy_cidaren.api.sessions import _UninitializedSession
-
+        
         with self.assertRaisesRegex(RuntimeError, '尚未初始化'):
             _UninitializedSession( ).get('https://example.invalid', timeout = 1)
-
+    
     def test_login_sessions_have_independent_headers(self):
         requests = types.ModuleType('requests')
         requests.exceptions = types.SimpleNamespace( )
@@ -25,7 +25,7 @@ class SessionTests(unittest.TestCase):
                     PublicInfo = lambda: types.SimpleNamespace(accept_encoding = 'gzip')),
             'easy_cidaren.security.signing': types.SimpleNamespace(encrypt_md5 = lambda value: 'signature'),
         }
-        path = Path(__file__).resolve( ).parents[1] / 'easy_cidaren' / 'api' / 'sessions.py'
+        path = PROJECT_ROOT / 'easy_cidaren' / 'api' / 'sessions.py'
         with patch.dict(sys.modules, modules):
             module = load_module('test_sessions_module', path)
             module.set_token('first')

@@ -19,7 +19,7 @@ base_headers = {"Host": "app.vocabgo.com",
 
 class _UninitializedSession(requests.Session):
     """Reject requests until login has configured the authenticated sessions."""
-
+    
     def request(self, method, url, params = None, data = None, headers = None,
                 cookies = None, files = None, auth = None, timeout = None,
                 allow_redirects = True, proxies = None, hooks = None, stream = None,

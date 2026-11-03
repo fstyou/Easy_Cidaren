@@ -1,9 +1,9 @@
 import sys
 import types
 import unittest
-from pathlib import Path
 from unittest.mock import Mock, patch
 
+from tests import PROJECT_ROOT
 from tests.module_loader import load_module
 
 
@@ -21,7 +21,7 @@ class CourseTests(unittest.TestCase):
                     Log = lambda name: types.SimpleNamespace(logger = Mock( ))),
             'easy_cidaren.utils.helpers': types.SimpleNamespace(create_timestamp = lambda: 123),
         }
-        path = Path(__file__).resolve( ).parents[1] / 'easy_cidaren' / 'api' / 'courses.py'
+        path = PROJECT_ROOT / 'easy_cidaren' / 'api' / 'courses.py'
         with patch.dict(sys.modules, modules), patch.object(api_package, 'sessions', sessions, create = True):
             module = load_module('test_courses_module', path)
             self.assertEqual(module.use_api_get_prototype('a&b'), 'test')

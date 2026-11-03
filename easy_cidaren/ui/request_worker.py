@@ -7,11 +7,11 @@ from PyQt6 import QtCore
 
 class RequestWorker(QtCore.QThread):
     result_ready = QtCore.pyqtSignal(object)
-
+    
     def __init__(self, operation: Callable, parent = None):
         super( ).__init__(parent)
         self.operation = operation
-
+    
     def run(self):
         try:
             result = self.operation( )

@@ -15,7 +15,7 @@ class DecodeTests(unittest.TestCase):
         payload = base64.b64encode(b'{"broken":}').decode( )
         with self.assertRaises(ValueError):
             debase64(payload)
-
+    
     def test_recovers_shuffled_chunks_including_the_remainder(self):
         original = {'word': 'test'}
         payload = base64.b64encode(json.dumps(original).encode( )).decode( )
@@ -25,7 +25,7 @@ class DecodeTests(unittest.TestCase):
         config = {'uc': [], 'avg': 5, 'loc': order}
         with patch.dict('easy_cidaren.security.decode.JV_THREE', {'3_test': config}):
             self.assertEqual(debase64(scrambled, '3_test'), original)
-
+    
     def test_short_obfuscated_payload_has_a_clear_error(self):
         with self.assertRaisesRegex(ValueError, '长度不足'):
             debase64('x', '3_1021')

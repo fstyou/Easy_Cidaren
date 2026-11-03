@@ -6,9 +6,11 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from tests import PROJECT_ROOT
+
 
 spec = importlib.util.spec_from_file_location(
-        'packaging_build', Path(__file__).resolve( ).parents[1] / 'build' / 'build.py'
+        'packaging_build', PROJECT_ROOT / 'build' / 'build.py'
 )
 build = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(build)
@@ -30,7 +32,7 @@ class WindowsPackagingTests(unittest.TestCase):
                 )
                 self.assertEqual(result.returncode, expected_code)
                 self.assertIn(expected_text, result.stdout + result.stderr)
-
+    
     def test_installer_uses_python_architecture(self):
         for python_platform, arch, inno_arch in (
                 ('win-amd64', 'x64', 'x64compatible'),
@@ -48,7 +50,7 @@ class WindowsPackagingTests(unittest.TestCase):
                 self.assertIn(f'/DAppArch={arch}', command)
                 self.assertIn(f'/DInnoArch={inno_arch}', command)
                 self.assertIn(f'/DOutputName=easy-cidaren_{build.VERSION}_windows_{arch}', command)
-
+    
     def test_publish_preserves_other_files_and_replaces_existing_target(self):
         with tempfile.TemporaryDirectory( ) as temp:
             root = Path(temp)
@@ -66,12 +68,12 @@ class WindowsPackagingTests(unittest.TestCase):
                 build.publish(source, target)
             self.assertEqual(existing.read_bytes( ), b'unchanged')
             self.assertEqual(target.read_bytes( ), b'updated')
-
+    
     def test_unsupported_python_architecture_is_rejected(self):
         with patch.object(build.sysconfig, 'get_platform', return_value = 'win32'):
             with self.assertRaisesRegex(RuntimeError, 'win32'):
                 build.windows( )
-
+    
     def test_temporary_files_removed_only_after_success(self):
         for failure in (False, True):
             with self.subTest(failure = failure), tempfile.TemporaryDirectory( ) as temp:

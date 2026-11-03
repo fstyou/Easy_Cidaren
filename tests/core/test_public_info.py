@@ -7,13 +7,14 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from tests import PROJECT_ROOT
 from tests.module_loader import load_module
 
 
 class PublicInfoTests(unittest.TestCase):
     def test_settings_update_the_config(self):
         logger = types.SimpleNamespace(logger = logging.getLogger('test_public_info'))
-        path = Path(__file__).resolve( ).parents[1] / 'easy_cidaren' / 'core' / 'public_info.py'
+        path = PROJECT_ROOT / 'easy_cidaren' / 'core' / 'public_info.py'
         config = {
             'min_time': 1, 'max_time': 3, 'spend_min_time': 4, 'spend_max_time': 5,
             'br_choices': True, 'accept_encoding': 'gzip',
@@ -48,7 +49,7 @@ class PublicInfoTests(unittest.TestCase):
     
     def test_first_run_creates_settings(self):
         logger = types.SimpleNamespace(logger = logging.getLogger('test_public_info'))
-        path = Path(__file__).resolve( ).parents[1] / 'easy_cidaren' / 'core' / 'public_info.py'
+        path = PROJECT_ROOT / 'easy_cidaren' / 'core' / 'public_info.py'
         with tempfile.TemporaryDirectory( ) as directory, \
                 patch.dict(sys.modules,
                            {'easy_cidaren.app_logging.config': types.SimpleNamespace(Log = lambda name: logger)}):

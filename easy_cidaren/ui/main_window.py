@@ -47,8 +47,8 @@ class UiMainWindow(QMainWindow):
             self.ui.token_input.setText(previous_token)
             self.ui.login_hint.setText("已读取上次获取的 Token，请点击登录")
         self._apply_window_limits( )
-
-
+    
+    
     def show_task_progress(self, task_name):
         was_hidden = self.ui.progress_card.isHidden( )
         self.ui.progress_task_label.setText(task_name)
@@ -62,7 +62,7 @@ class UiMainWindow(QMainWindow):
         self._apply_window_limits( )
         if was_hidden:
             QtCore.QTimer.singleShot(0, self._fit_expanded_content)
-
+    
     def _fit_expanded_content(self):
         """Grow for newly visible content, keeping the window within the screen."""
         if not self.isVisible( ):
@@ -91,11 +91,11 @@ class UiMainWindow(QMainWindow):
                 self.move(self.x( ), max(available.top( ), self.y( ) - (frame.bottom( ) - available.bottom( ))))
         self._reveal_progress( )
         self._schedule_minimum_height_check( )
-
+    
     def _reveal_progress(self):
         if self.ui.progress_card.isVisible( ):
             self.ui.scroll_area.ensureWidgetVisible(self.ui.progress_card, 0, 8)
-
+    
     def set_logged_in(self, logged_in):
         self._logged_in = logged_in
         self.ui.label.setText('账号信息' if logged_in else '账号登录')
@@ -108,7 +108,7 @@ class UiMainWindow(QMainWindow):
         self._apply_window_limits( )
         if logged_in:
             QtCore.QTimer.singleShot(0, self._fit_expanded_content)
-
+    
     def _apply_window_limits(self):
         """Use compact limits for each stage, capped by the current screen."""
         running = not self.ui.progress_card.isHidden( )
@@ -125,7 +125,7 @@ class UiMainWindow(QMainWindow):
             max_width = 1000
         self.setMinimumSize(min(680, max_width), min(min_height, max_height))
         self.setMaximumSize(max_width, max_height)
-
+    
     def showEvent(self, a0):
         super( ).showEvent(a0)
         handle = self.windowHandle( )
@@ -133,18 +133,18 @@ class UiMainWindow(QMainWindow):
             handle.screenChanged.connect(self._on_screen_changed)
             self._screen_signal_connected = True
         self._apply_window_limits( )
-
+    
     def resizeEvent(self, a0):
         super( ).resizeEvent(a0)
         self._schedule_minimum_height_check( )
-
+    
     def _schedule_minimum_height_check(self):
         if not hasattr(self, 'ui') or self.ui.progress_card.isHidden( ):
             return
         if not self._minimum_height_check_pending:
             self._minimum_height_check_pending = True
             QtCore.QTimer.singleShot(0, self._correct_running_minimum_height)
-
+    
     def _correct_running_minimum_height(self):
         self._minimum_height_check_pending = False
         if not self.isVisible( ) or self.ui.progress_card.isHidden( ):
@@ -161,17 +161,17 @@ class UiMainWindow(QMainWindow):
                 frame = self.frameGeometry( )
                 if frame.bottom( ) > available.bottom( ):
                     self.move(self.x( ), max(available.top( ), self.y( ) - (frame.bottom( ) - available.bottom( ))))
-
+    
     def _on_screen_changed(self, _screen):
         self._apply_window_limits( )
         QtCore.QTimer.singleShot(0, self._fit_expanded_content)
-
+    
     def _hide_task_progress(self):
         self.ui.progress_card.hide( )
         self.ui.stop_task.hide( )
         self._apply_window_limits( )
         QtCore.QTimer.singleShot(0, self._fit_expanded_content)
-
+    
     def show_notice(self, message):
         """Keep task warnings visible without blocking the worker or opening many windows."""
         if self._notice_dialog is None:
@@ -184,14 +184,14 @@ class UiMainWindow(QMainWindow):
         self._notice_dialog.setText(prefix + "\n\n".join(self._notice_messages[-20:]))
         self._notice_dialog.show( )
         self._notice_dialog.raise_( )
-
+    
     def _notice_closed(self):
         dialog = self._notice_dialog
         self._notice_dialog = None
         self._notice_messages = []
         if dialog:
             dialog.deleteLater( )
-
+    
     def token_login(self):
         if self.login_worker:
             return
@@ -210,7 +210,7 @@ class UiMainWindow(QMainWindow):
         self.login_worker.result_ready.connect(self.on_login_result)
         self.login_worker.finished.connect(self.on_login_finished)
         self.login_worker.start( )
-
+    
     def on_login_result(self, result):
         if isinstance(result, Exception):
             self.main_logger.error('登录失败：%s', result, exc_info = (type(result), result, result.__traceback__))
@@ -236,14 +236,14 @@ class UiMainWindow(QMainWindow):
         self.ui.warn_info.hide( )
         self.set_logged_in(True)
         self.get_task_list( )
-
+    
     def on_login_finished(self):
         worker = self.login_worker
         self.login_worker = None
         self.set_ui_enabled(self.task_list_worker is None)
         if worker:
             worker.deleteLater( )
-
+    
     def get_task_list(self):
         if self.task_list_worker is not None or self.task_worker is not None or self.capture_worker is not None:
             return
@@ -263,7 +263,7 @@ class UiMainWindow(QMainWindow):
         worker.result_ready.connect(self.on_task_list_result)
         worker.finished.connect(self.on_task_list_finished)
         worker.start( )
-
+    
     def on_task_list_result(self, result):
         if isinstance(result, Exception):
             self.main_logger.error('获取任务列表失败：%s', result)
@@ -279,7 +279,7 @@ class UiMainWindow(QMainWindow):
             self.public_info.task_list = []
             self.ui.task_list.setRowCount(0)
             show_warning(self, '任务列表格式错误', '服务端返回的任务信息不完整，请稍后重试')
-
+    
     def render_task_list(self):
         for task in self.public_info.task_list:
             task_name = task['task_name']
@@ -320,7 +320,7 @@ class UiMainWindow(QMainWindow):
                     cell.setToolTip(reason)
                     cell.setFlags(cell.flags( ) & ~QtCore.Qt.ItemFlag.ItemIsSelectable)
                 self.ui.task_list.setItem(row, col, cell)
-
+    
     def on_task_list_finished(self):
         worker = self.task_list_worker
         self.task_list_worker = None
@@ -328,7 +328,7 @@ class UiMainWindow(QMainWindow):
         self.set_ui_enabled(self.login_worker is None)
         if worker:
             worker.deleteLater( )
-
+    
     def _select_task_row(self, row):
         """
         勾选单选框时同步选中表格行
@@ -340,7 +340,7 @@ class UiMainWindow(QMainWindow):
         item = self.ui.task_list.item(row, 1)
         if item and not unavailable_reason(item.data(QtCore.Qt.ItemDataRole.UserRole)):
             self.ui.task_list.setCurrentItem(item)
-
+    
     def on_task_item_clicked(self, item):
         """
         点击任务行时自动勾选该行单选框
@@ -360,13 +360,13 @@ class UiMainWindow(QMainWindow):
                 radio.setChecked(True)
         except Exception as e:
             self.main_logger.error(f"选择任务行失败: {e}")
-
+    
     def confirm_task_start(self, details):
         return confirm_action(
                 self, "确认开始", details, confirm_text = "开始", default_confirm = True,
                 detail = "运行期间请保持程序打开",
         )
-
+    
     def _start_worker(self, tasks, *, batch_mode):
         self.public_info.is_self_built = False
         self.public_info.right_count = 0
@@ -386,7 +386,7 @@ class UiMainWindow(QMainWindow):
         label = f"准备执行 {len(tasks)} 个任务…" if batch_mode else tasks[0]['task_name']
         self.show_task_progress(label)
         self.task_worker.start( )
-
+    
     def start(self):
         try:
             current_item = self.ui.task_list.currentItem( )
@@ -411,7 +411,7 @@ class UiMainWindow(QMainWindow):
             self._hide_task_progress( )
             self.set_ui_enabled(True)
             show_warning(self, "启动任务失败", str(e))
-
+    
     def start_batch(self):
         """一键刷题：按顺序自动执行列表中所有未完成的任务"""
         try:
@@ -434,7 +434,7 @@ class UiMainWindow(QMainWindow):
             self._hide_task_progress( )
             self.set_ui_enabled(True)
             show_warning(self, "启动任务失败", str(e))
-
+    
     def update_progress(self, progress_text):
         """
         更新进度
@@ -460,7 +460,7 @@ class UiMainWindow(QMainWindow):
                             self.ui.progress_task_label.setText(f"[{segments[4]}] {segments[5]}")
             except ValueError:
                 pass
-
+    
     def on_task_finished(self, message):
         """
         任务完成
@@ -480,7 +480,7 @@ class UiMainWindow(QMainWindow):
         QtCore.QTimer.singleShot(1000, self.get_task_list)
         if self.task_worker:
             self.task_worker = None
-
+    
     def on_batch_finished(self, summary):
         """
         一键刷题全部任务执行结束
@@ -497,7 +497,7 @@ class UiMainWindow(QMainWindow):
         QtCore.QTimer.singleShot(1000, self.get_task_list)
         if self.task_worker:
             self.task_worker = None
-
+    
     def on_task_notice(self, message):
         """
         任务执行中的提示信息
@@ -506,7 +506,7 @@ class UiMainWindow(QMainWindow):
         """
         self.main_logger.info(message)
         self.show_notice(message)
-
+    
     def on_task_error(self, error_message):
         """
         任务出错
@@ -520,12 +520,12 @@ class UiMainWindow(QMainWindow):
         show_error(self, "任务停止", error_message)
         if self.task_worker:
             self.task_worker = None
-
+    
     def open_readme(self):
         url = QtCore.QUrl("https://github.com/fstyou/Easy_Cidaren#readme")
         if not QtGui.QDesktopServices.openUrl(url):
             show_warning(self, "无法打开帮助", "无法打开浏览器，请检查系统默认浏览器设置")
-
+    
     def open_settings(self, _action = None):
         if self.settings is not None and self.settings.isVisible( ):
             self.settings.raise_( )
@@ -534,14 +534,14 @@ class UiMainWindow(QMainWindow):
         settings = SettingsWindow(self.public_info, self)
         self.settings = settings
         settings.show( )
-
+    
     def show_about(self):
         AboutDialog(self.public_info.version, self).exec( )
-
+    
     def export_logs(self):
         from easy_cidaren.ui.log_export import export_logs
         export_logs(self)
-
+    
     def play_music(self):
         """
         播放音乐
@@ -564,7 +564,7 @@ class UiMainWindow(QMainWindow):
             effect.play( )
         except Exception as e:
             self.main_logger.warning(f"播放提示音失败: {e}")
-
+    
     def toggle_token_capture(self):
         if self.capture_worker:
             self._capture_stopping = True
@@ -593,13 +593,13 @@ class UiMainWindow(QMainWindow):
         self.ui.token_input.setEnabled(False)
         self.capture_dialog.open( )
         self.capture_worker.start( )
-
+    
     def on_capture_status(self, message):
         if self.capture_dialog:
             self.capture_dialog.show_status(message)
         if message.startswith(('⛔', '请恢复目标客户端')):
             self._capture_warnings.append(message)
-
+    
     def _on_capture_dialog_closed(self):
         dialog = self.capture_dialog
         self.capture_dialog = None
@@ -609,12 +609,12 @@ class UiMainWindow(QMainWindow):
             messages = '\n'.join(self._capture_warnings)
             self._capture_warnings = []
             QtCore.QTimer.singleShot(0, lambda: self.show_notice(messages))
-
+    
     def on_capture_error(self, message):
         self._capture_error = True
         if self.capture_dialog:
             self.capture_dialog.failed(message)
-
+    
     def on_capture_finished(self):
         worker = self.capture_worker
         self.capture_worker = None
@@ -631,14 +631,14 @@ class UiMainWindow(QMainWindow):
             self.ui.token_input.setText(self._captured_token)
             self._captured_token = None
             self.token_login( )
-
+    
     def on_builtin_token_captured(self, token):
         # Wait for the worker to restore the proxy before attempting login.
         if token:
             self._captured_token = token
             if self.capture_dialog:
                 self.capture_dialog.captured( )
-
+    
     def set_ui_enabled(self, enabled):
         self.ui.token_input.setEnabled(enabled)
         self.ui.login.setEnabled(enabled)
@@ -659,7 +659,7 @@ class UiMainWindow(QMainWindow):
         self.ui.batch_start.setEnabled(enabled)
         self.ui.settings_button.setEnabled(enabled)
         self.ui.stop_task.setEnabled(not enabled)
-
+    
     def closeEvent(self, a0):
         if self.task_list_worker and self.task_list_worker.isRunning( ):
             self.task_list_worker.wait( )
@@ -673,7 +673,7 @@ class UiMainWindow(QMainWindow):
             self.login_worker.wait( )
         if a0 is not None:
             a0.accept( )
-
+    
     def stop_current_task(self):
         """
         停止当前任务

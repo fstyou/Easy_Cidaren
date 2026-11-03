@@ -14,7 +14,7 @@ class TaskSelectionTests(unittest.TestCase):
                 load_class_tasks(info)
         self.assertEqual(info.task_list, [])
         self.assertEqual(info.class_task, [])
-
+    
     def test_task_times_use_start_plus_duration_in_local_time(self):
         start = 1793604627860
         duration = 115172140

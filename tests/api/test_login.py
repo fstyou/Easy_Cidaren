@@ -16,7 +16,7 @@ class LoginErrorTests(unittest.TestCase):
                     patch('easy_cidaren.api.login.requests.rqs_session') as session:
                 session.get.side_effect = error('test')
                 self.assertEqual(verify_token('test'), expected)
-
+    
     def test_http_error_returns_status(self):
         response = Mock( )
         response.raise_for_status.side_effect = exceptions.HTTPError('test')

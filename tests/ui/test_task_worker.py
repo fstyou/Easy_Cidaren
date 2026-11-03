@@ -2,9 +2,9 @@ import logging
 import sys
 import types
 import unittest
-from pathlib import Path
 from unittest.mock import Mock, patch
 
+from tests import PROJECT_ROOT
 from tests.module_loader import load_module
 
 
@@ -39,7 +39,7 @@ class WorkerTests(unittest.TestCase):
             'easy_cidaren.core.word_list': types.SimpleNamespace(
                     extract_book_word = Mock( ), handle_word_result = Mock( ), query_word_unit = Mock( )),
         }
-        path = Path(__file__).resolve( ).parents[1] / 'easy_cidaren' / 'ui' / 'task_worker.py'
+        path = PROJECT_ROOT / 'easy_cidaren' / 'ui' / 'task_worker.py'
         with patch.dict(sys.modules, modules):
             module = load_module('test_task_worker_module', path)
             state = object( )
@@ -58,7 +58,7 @@ class WorkerTests(unittest.TestCase):
             worker.run( )
             self.assertEqual(worker.complete_test.call_count, 2)
             self.assertIn('成功 2 个', worker.batch_finished.messages[-1])
-
+            
             # A failed word-selection request must reach task retry handling.
             state = types.SimpleNamespace(course_id = 'course', get_word_list_result = {}, word_list = ['word'])
             worker = module.TaskWorker(state, [], batch_mode = False)
@@ -67,7 +67,7 @@ class WorkerTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, 'selection failed'):
                 worker.complete_practice('unit', 0, 1)
             worker.start_answering.assert_not_called( )
-
+            
             # Starting another task must not reuse the previous task's vocabulary.
             state.word_list = ['stale']
             state.now_unit = 'stale'

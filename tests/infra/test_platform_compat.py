@@ -6,9 +6,10 @@ import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
 
+from tests import PROJECT_ROOT
 from tests.module_loader import load_module
 
-ROOT = Path(__file__).resolve( ).parents[1]
+ROOT = PROJECT_ROOT
 sys.path.insert(0, str(ROOT))
 
 
@@ -34,7 +35,7 @@ class PlatformCompatibilityTests(unittest.TestCase):
                 with patch('easy_cidaren.token_capture.service.time.time', side_effect = [0, 16]):
                     with self.assertRaisesRegex(RuntimeError, '证书生成超时'):
                         service._ensure_mitm_cert_ready( )
-
+    
     def test_answer_library_does_not_depend_on_working_directory(self):
         from easy_cidaren.paths import DATA_DIR
         with tempfile.TemporaryDirectory( ) as directory:

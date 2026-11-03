@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from tests import PROJECT_ROOT
 from tests.module_loader import load_module
 
 
@@ -19,7 +20,7 @@ class FakeLog:
 
 class AnswerLibraryTests(unittest.TestCase):
     def test_phrase_and_word_answers_share_storage_without_mixing(self):
-        path = Path(__file__).resolve( ).parents[1] / 'easy_cidaren' / 'core' / 'answer_library.py'
+        path = PROJECT_ROOT / 'easy_cidaren' / 'core' / 'answer_library.py'
         with tempfile.TemporaryDirectory( ) as directory:
             modules = {
                 'easy_cidaren.app_logging.config': types.SimpleNamespace(Log = FakeLog),

@@ -40,7 +40,7 @@ class UserInfoWidget(QtWidgets.QWidget):
             layout.addWidget(heading, row, column, QtCore.Qt.AlignmentFlag.AlignLeft | QtCore.Qt.AlignmentFlag.AlignTop)
             layout.addWidget(value, row, column + 1)
             self.values[key] = value
-
+    
     def set_user(self, user: Mapping):
         if not isinstance(user, Mapping):
             raise ValueError('用户信息格式无效')
@@ -48,6 +48,6 @@ class UserInfoWidget(QtWidgets.QWidget):
             value = user.get(key)
             text = str(value).strip( ) if isinstance(value, (str, int)) and not isinstance(value, bool) else ''
             label.setText(text or '—')
-
+    
     def clear(self):
         self.set_user({})

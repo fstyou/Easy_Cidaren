@@ -110,7 +110,7 @@ def inspect_about(dialog):
     project_link = dialog.findChild(QLabel, 'projectLink')
     assert 'https://github.com/fstyou/Easy_Cidaren' in project_link.text( )
     assert project_link.fontMetrics( ).horizontalAdvance(
-        'https://github.com/fstyou/Easy_Cidaren') <= project_link.contentsRect( ).width( )
+            'https://github.com/fstyou/Easy_Cidaren') <= project_link.contentsRect( ).width( )
     assert project_link.alignment( ) & Qt.AlignmentFlag.AlignLeft
     with patch('easy_cidaren.ui.about.QtGui.QDesktopServices.openUrl', return_value = True) as open_url:
         project_link.linkActivated.emit('https://github.com/fstyou/Easy_Cidaren')
