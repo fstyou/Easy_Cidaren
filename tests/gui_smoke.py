@@ -8,6 +8,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
+from PyQt6 import sip
 from PyQt6.QtCore import Qt, QTimer, QEvent
 from PyQt6.QtGui import QColor, QPalette, QCloseEvent
 from PyQt6.QtWidgets import QApplication, QFileDialog, QLabel, QMessageBox, QPushButton, QRadioButton, \
@@ -703,16 +704,21 @@ def check_shutdown(app: QApplication):
 def main( ):
     app = QApplication([])
     theme = ThemeManager(app, 'light')
-    check_dialogs(app, theme)
-    window = create_test_window(app)
     try:
-        check_settings_and_about(window, app, theme)
-        available = check_login_and_task_list(window, app, theme)
-        check_task_execution(window, app, available)
-        check_token_capture(window, app, theme)
+        check_dialogs(app, theme)
+        window = create_test_window(app)
+        try:
+            check_settings_and_about(window, app, theme)
+            available = check_login_and_task_list(window, app, theme)
+            check_task_execution(window, app, available)
+            check_token_capture(window, app, theme)
+        finally:
+            window.close( )
+        check_shutdown(app)
     finally:
-        window.close( )
-    check_shutdown(app)
+        app.removeEventFilter(theme)
+        app.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+        sip.delete(app)
     print('GUI smoke test passed')
 
 
