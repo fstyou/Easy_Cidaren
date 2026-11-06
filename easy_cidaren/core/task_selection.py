@@ -3,21 +3,31 @@
 from datetime import datetime
 
 from easy_cidaren.api.tasks import get_class_task
-from easy_cidaren.app_logging.config import Log
+from easy_cidaren.app_logging.config import get_logger
 
-basic_util = Log("task_selection")
+basic_util = get_logger("task_selection")
 
 
-def load_class_tasks(public_info):
-    public_info.class_task = []
-    public_info.task_list = []
+def load_class_tasks(task_type: int, *, cancelled = lambda: False):
+    """Load a complete filtered list; partial pages never become visible to the UI."""
+    tasks = []
     page = 1
-    get_class_task(public_info, page)
-    while public_info.task_total_count > page * 10:
+    while not cancelled( ):
+        result = get_class_task(page)
+        if cancelled( ):
+            return []
+        tasks.extend(task for task in result['records']
+                     if task['over_status'] != 3 and task['task_type'] == task_type)
+        if result['total'] <= page * 10:
+            break
+        if not result['records']:
+            raise ValueError('任务列表分页数据不完整')
         page += 1
-        get_class_task(public_info, page)
-    get_all_task(public_info)
-    return public_info.task_list
+    if cancelled( ):
+        return []
+    basic_util.debug('任务数据：%s', tasks, extra = {'file_only': True})
+    basic_util.info('获取到 %s 个任务', len(tasks))
+    return tasks
 
 
 def task_times(task):
@@ -40,6 +50,8 @@ def task_times(task):
 
 
 def unavailable_reason(task):
+    if task.get('over_status') == 3:
+        return '任务已过期，无法执行'
     if task.get('over_status') == 1:
         return '任务尚未开始，请在开始时间后再试'
     if task.get('progress', 0) >= 100:
@@ -49,22 +61,3 @@ def unavailable_reason(task):
 
 def batch_tasks(tasks):
     return [task for task in tasks if not unavailable_reason(task)]
-
-
-def get_all_task(public_info):
-    """
-    获取全部任务（包括已完成），排除已过期
-    :param public_info: 公共组件
-    """
-    all_task_list = []
-    for tasks in public_info.class_task:
-        for task in tasks['records']:
-            # over_status 1 未开始 2 未过期 3 已过期
-            if task['over_status'] != 3:
-                # 1为班级学习任务，2为班级测试任务
-                choice = public_info.task_type_choices
-                if task['task_type'] == choice:
-                    all_task_list.append(task)
-    basic_util.logger.debug('任务数据：%s', all_task_list, extra = {'file_only': True})
-    basic_util.logger.info('获取到 %s 个任务', len(all_task_list))
-    public_info.task_list = all_task_list

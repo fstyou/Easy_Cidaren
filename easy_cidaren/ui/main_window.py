@@ -5,7 +5,6 @@ from PyQt6.QtMultimedia import QSoundEffect
 from PyQt6.QtWidgets import QMainWindow, QMessageBox
 
 from easy_cidaren.api.login import verify_token
-from easy_cidaren.core.public_info import PublicInfo
 from easy_cidaren.core.task_selection import batch_tasks, load_class_tasks, task_times, unavailable_reason
 from easy_cidaren.paths import ASSETS_DIR, CAPTURE_DATA_DIR
 from easy_cidaren.token_capture.service import CaptureStatus
@@ -27,8 +26,10 @@ class UiMainWindow(QMainWindow):
         self.settings: SettingsWindow | None = None
         self._sound_effect: QSoundEffect | None = None
         self._logged_in = False
+        self._closing = False
         self.token = ''
         self.task_worker = None
+        self._task_stopping = False
         self._batch_mode = False
         self.capture_worker = None
         self.capture_dialog = None
@@ -43,6 +44,9 @@ class UiMainWindow(QMainWindow):
         self._screen_signal_connected = False
         self._minimum_height_check_pending = False
         self.ui = MainWindowUi(self)
+        theme = manager( )
+        if theme:
+            theme.changed.connect(self._refresh_task_colors)
         self.setWindowTitle(f"Easy Cidaren · {self.public_info.version}")
         previous_token = load_token( )
         if previous_token:
@@ -176,6 +180,8 @@ class UiMainWindow(QMainWindow):
     
     def show_notice(self, message):
         """Keep task warnings visible without blocking the worker or opening many windows."""
+        if self._closing:
+            return
         if self._notice_dialog is None:
             self._notice_messages = []
             self._notice_dialog = create_message(self, "运行提示", "", QMessageBox.Icon.Warning)
@@ -195,7 +201,7 @@ class UiMainWindow(QMainWindow):
             dialog.deleteLater( )
     
     def token_login(self):
-        if self.login_worker:
+        if self._closing or self.login_worker:
             return
         self.token = self.ui.token_input.text( ).split('\n')[0].strip( )
         if not self.token:
@@ -208,17 +214,22 @@ class UiMainWindow(QMainWindow):
         self.ui.stop_task.setEnabled(False)
         self.ui.warn_info.setText('正在登录…')
         self.ui.warn_info.show( )
-        self.login_worker = RequestWorker(lambda: verify_token(self.token), self)
+        self.login_worker = RequestWorker(
+                lambda: verify_token(self.token, accept_encoding = self.public_info.settings.accept_encoding), self)
         self.login_worker.result_ready.connect(self.on_login_result)
         self.login_worker.finished.connect(self.on_login_finished)
         self.login_worker.start( )
     
     def on_login_result(self, result):
+        if self._closing:
+            return
         if isinstance(result, Exception):
             self.main_logger.error('登录失败：%s', result, exc_info = (type(result), result, result.__traceback__))
-            result = 7
+            self.ui.warn_info.hide( )
+            show_warning(self, '登录失败', f'登录处理失败：{result}')
+            return
         if not isinstance(result, dict):
-            errors = {1: 'Token 已过期，请重新获取', 2: 'HTTP 请求失败',
+            errors = {1: 'Token 已过期或无效，请重新获取', 2: 'HTTP 请求失败',
                       3: '连接超时', 4: '响应格式错误', 5: 'SSL 连接错误',
                       6: '代理连接错误', 7: '网络连接错误'}
             message = errors.get(result, '服务端响应异常') if isinstance(result, int) else '服务端响应异常'
@@ -242,39 +253,45 @@ class UiMainWindow(QMainWindow):
     def on_login_finished(self):
         worker = self.login_worker
         self.login_worker = None
-        self.set_ui_enabled(self.task_list_worker is None)
         if worker:
             worker.deleteLater( )
+        if self._closing:
+            self._close_when_idle( )
+            return
+        self.set_ui_enabled(self.task_list_worker is None)
     
     def get_task_list(self):
-        if self.task_list_worker is not None or self.task_worker is not None or self.capture_worker is not None:
+        if self._closing or self.task_list_worker is not None or self.task_worker is not None or self.capture_worker is not None:
             return
         if not self._logged_in:
             return
         self.ui.task_list.setRowCount(0)
         self.public_info.task_list = []
-        self.public_info._task_choices = 1 if self.ui.learn_task.isChecked( ) else 2
-        PublicInfo.task_type = 'ClassTask'
-        PublicInfo.task_type_int = 2
+        task_type = 1 if self.ui.learn_task.isChecked( ) else 2
         self.set_ui_enabled(False)
         self.ui.stop_task.setEnabled(False)
         self.ui.warn_info.setText('正在加载任务…')
         self.ui.warn_info.show( )
-        worker = RequestWorker(lambda: load_class_tasks(self.public_info), self)
+        worker = RequestWorker(lambda: load_class_tasks(task_type, cancelled = lambda: self._closing), self)
         self.task_list_worker = worker
         worker.result_ready.connect(self.on_task_list_result)
         worker.finished.connect(self.on_task_list_finished)
         worker.start( )
     
     def on_task_list_result(self, result):
+        if self._closing:
+            return
         if isinstance(result, Exception):
             self.main_logger.error('获取任务列表失败：%s', result)
             show_warning(self, "获取任务列表失败", str(result))
             return
-        if not result:
-            show_information(self, "任务列表", "当前没有任务")
-            return
         try:
+            if not isinstance(result, list):
+                raise ValueError('任务列表必须是列表')
+            self.public_info.task_list = result
+            if not result:
+                show_information(self, "任务列表", "当前没有任务")
+                return
             self.render_task_list( )
         except (KeyError, TypeError, ValueError, AttributeError) as exc:
             self.main_logger.error('任务列表格式错误：%s', exc)
@@ -314,22 +331,40 @@ class UiMainWindow(QMainWindow):
                                        start = 1):
                 cell = QtWidgets.QTableWidgetItem(text)
                 cell.setData(QtCore.Qt.ItemDataRole.UserRole, task)
-                if progress >= 100:
-                    cell.setForeground(QtGui.QColor("#79d6a7" if manager( ) and manager( ).dark else "#196b4b"))
-                elif reason:
-                    cell.setForeground(QtGui.QColor("#a8b9cc" if manager( ) and manager( ).dark else "#65758a"))
                 if reason:
                     cell.setToolTip(reason)
                     cell.setFlags(cell.flags( ) & ~QtCore.Qt.ItemFlag.ItemIsSelectable)
                 self.ui.task_list.setItem(row, col, cell)
+        self._refresh_task_colors( )
+
+    def _refresh_task_colors(self):
+        theme = manager( )
+        dark = bool(theme and theme.dark)
+        for row in range(self.ui.task_list.rowCount( )):
+            for column in range(1, self.ui.task_list.columnCount( )):
+                item = self.ui.task_list.item(row, column)
+                if item is None:
+                    continue
+                task = item.data(QtCore.Qt.ItemDataRole.UserRole)
+                if not isinstance(task, dict):
+                    continue
+                color = None
+                if task.get('progress', 0) >= 100:
+                    color = '#79d6a7' if dark else '#196b4b'
+                elif unavailable_reason(task):
+                    color = '#a8b9cc' if dark else '#65758a'
+                item.setForeground(QtGui.QBrush(QtGui.QColor(color)) if color else QtGui.QBrush( ))
     
     def on_task_list_finished(self):
         worker = self.task_list_worker
         self.task_list_worker = None
-        self.ui.warn_info.hide( )
-        self.set_ui_enabled(self.login_worker is None)
         if worker:
             worker.deleteLater( )
+        if self._closing:
+            self._close_when_idle( )
+            return
+        self.ui.warn_info.hide( )
+        self.set_ui_enabled(self.login_worker is None)
     
     def _select_task_row(self, row):
         """
@@ -370,6 +405,9 @@ class UiMainWindow(QMainWindow):
         )
     
     def _start_worker(self, tasks, *, batch_mode):
+        if self._closing or self.task_worker is not None:
+            return
+        self._task_stopping = False
         self.public_info.is_self_built = False
         self.public_info.right_count = 0
         self.public_info.wrong_count = 0
@@ -378,7 +416,9 @@ class UiMainWindow(QMainWindow):
         self.set_ui_enabled(False)
         self.task_worker = self.task_worker_class(self.public_info, tasks, batch_mode = batch_mode)
         self.task_worker.setParent(self)
-        self.task_worker.finished.connect(self.task_worker.deleteLater)
+        worker = self.task_worker
+        worker.finished.connect(lambda: self._on_task_worker_finished(worker))
+        worker.finished.connect(worker.deleteLater)
         self.task_worker.task_finished.connect(self.on_task_finished)
         self.task_worker.task_error.connect(self.on_task_error)
         self.task_worker.task_progress.connect(self.update_progress)
@@ -389,10 +429,24 @@ class UiMainWindow(QMainWindow):
         self.show_task_progress(label)
         self.task_worker.start( )
     
+    def _on_task_worker_finished(self, worker):
+        if self.task_worker is worker:
+            self.task_worker = None
+            if self._closing:
+                self._close_when_idle( )
+                return
+            self.set_ui_enabled(True)
+            if self._task_stopping:
+                self._task_stopping = False
+                self._batch_mode = False
+                self._hide_task_progress( )
+                self.main_logger.info('任务已手动停止')
+                show_information(self, '任务停止', '任务已停止')
+
     def start(self):
         try:
             current_item = self.ui.task_list.currentItem( )
-            if not self.public_info.task_list == [] and not self.public_info.class_task == [] and current_item:
+            if self._logged_in and current_item:
                 if self.ui.learn_task.isChecked( ):
                     self.main_logger.info("开始班级学习任务")
                 else:
@@ -404,7 +458,6 @@ class UiMainWindow(QMainWindow):
                     return
                 task_name = task_info['task_name']
                 if self.confirm_task_start(f"开始以下任务？\n\n{task_name}"):
-                    self.public_info.class_task = [task_info]
                     self._start_worker([task_info], batch_mode = False)
             else:
                 show_information(self, "无法开始任务", "请先登录并选择要执行的任务")
@@ -437,31 +490,16 @@ class UiMainWindow(QMainWindow):
             self.set_ui_enabled(True)
             show_warning(self, "启动任务失败", str(e))
     
-    def update_progress(self, progress_text):
-        """
-        更新进度
-        :param progress_text: 格式 "done/total|right|wrong|skip|index/total|task_name"
-        :return:
-        """
-        # 先按 | 切分(避免 index/total 段中的 / 破坏 done/total 解析)
-        segments = progress_text.split('|', 5)
-        dt = segments[0].split('/')
-        if len(dt) == 2:
-            try:
-                done = int(dt[0])
-                total = int(dt[1])
-                self.ui.progress_bar.setRange(0, total)
-                self.ui.progress_bar.setValue(done)
-                self.ui.progress_label.setText(f"{done}/{total}")
-                if len(segments) > 2:
-                    self.ui.progress_right_label.setText(f"正确 {segments[1]}")
-                    self.ui.progress_wrong_label.setText(f"错误 {segments[2]}")
-                    if len(segments) > 3:
-                        self.ui.progress_skip_label.setText(f"跳过 {segments[3]}")
-                        if len(segments) > 5:
-                            self.ui.progress_task_label.setText(f"[{segments[4]}] {segments[5]}")
-            except ValueError:
-                pass
+    def update_progress(self, progress):
+        if self._closing:
+            return
+        self.ui.progress_bar.setRange(0, progress.total)
+        self.ui.progress_bar.setValue(progress.done)
+        self.ui.progress_label.setText(f"{progress.done}/{progress.total}")
+        self.ui.progress_right_label.setText(f"正确 {progress.right}")
+        self.ui.progress_wrong_label.setText(f"错误 {progress.wrong}")
+        self.ui.progress_skip_label.setText(f"跳过 {progress.skipped}")
+        self.ui.progress_task_label.setText(f"[{progress.task_index}/{progress.task_total}] {progress.task_name}")
     
     def on_task_finished(self, message):
         """
@@ -469,19 +507,18 @@ class UiMainWindow(QMainWindow):
         :param message:
         :return:
         """
-        self.main_logger.info(f'{message}')
+        if self._closing or self._task_stopping:
+            return
+        self.main_logger.info(message)
         if self._batch_mode:
             # 批量模式：记录结果，全部结束后再刷新任务列表
             self.show_task_progress("正在准备下一个任务…")
             return
-        self.set_ui_enabled(True)
         self._hide_task_progress( )
         self.play_music( )
         show_information(self, "任务完成", message)
         # 自动刷新任务列表，显示最新进度和得分
         QtCore.QTimer.singleShot(1000, self.get_task_list)
-        if self.task_worker:
-            self.task_worker = None
     
     def on_batch_finished(self, summary):
         """
@@ -489,16 +526,15 @@ class UiMainWindow(QMainWindow):
         :param summary:
         :return:
         """
+        if self._closing or self._task_stopping:
+            return
         self._batch_mode = False
-        self.set_ui_enabled(True)
         self._hide_task_progress( )
         self.main_logger.info(summary)
         self.play_music( )
         show_information(self, "一键刷题完成", summary)
         # 等服务端进度落库后再刷新
         QtCore.QTimer.singleShot(1000, self.get_task_list)
-        if self.task_worker:
-            self.task_worker = None
     
     def on_task_notice(self, message):
         """
@@ -506,6 +542,8 @@ class UiMainWindow(QMainWindow):
         :param message:
         :return:
         """
+        if self._closing or self._task_stopping:
+            return
         self.main_logger.info(message)
         self.show_notice(message)
     
@@ -515,13 +553,12 @@ class UiMainWindow(QMainWindow):
         :param error_message:
         :return:
         """
+        if self._closing or self._task_stopping:
+            return
         self._batch_mode = False
-        self.set_ui_enabled(True)
         self._hide_task_progress( )
         self.main_logger.error(f"运行出错，错误信息：{error_message}")
         show_error(self, "任务停止", error_message)
-        if self.task_worker:
-            self.task_worker = None
     
     def open_readme(self):
         url = QtCore.QUrl("https://github.com/fstyou/Easy_Cidaren#readme")
@@ -533,12 +570,18 @@ class UiMainWindow(QMainWindow):
             self.settings.raise_( )
             self.settings.activateWindow( )
             return
+        if self.settings is not None:
+            self.settings.deleteLater( )
         settings = SettingsWindow(self.public_info, self)
         self.settings = settings
         settings.show( )
     
     def show_about(self):
-        AboutDialog(self.public_info.version, self).exec( )
+        dialog = AboutDialog(self.public_info.version, self)
+        try:
+            dialog.exec( )
+        finally:
+            dialog.deleteLater( )
     
     def export_logs(self):
         from easy_cidaren.ui.log_export import export_logs
@@ -549,25 +592,29 @@ class UiMainWindow(QMainWindow):
         播放音乐
         :return:
         """
-        if not self.public_info.play_music:
+        if not self.public_info.settings.play_music:
             return
-        if self.public_info.music_path:
-            if os.path.exists(self.public_info.music_path):
-                music_path = self.public_info.music_path
+        if self.public_info.settings.music_path:
+            if os.path.exists(self.public_info.settings.music_path):
+                music_path = self.public_info.settings.music_path
             else:
                 music_path = str(ASSETS_DIR / "music.wav")
                 self.main_logger.error("自定义音乐文件不存在，使用默认音乐")
         else:
             music_path = str(ASSETS_DIR / "music.wav")
         try:
-            effect = QSoundEffect(self)
-            self._sound_effect = effect
+            effect = self._sound_effect
+            if effect is None:
+                effect = QSoundEffect(self)
+                self._sound_effect = effect
             effect.setSource(QtCore.QUrl.fromLocalFile(os.path.abspath(music_path)))
             effect.play( )
         except Exception as e:
             self.main_logger.warning(f"播放提示音失败: {e}")
     
     def toggle_token_capture(self):
+        if self._closing:
+            return
         if self.capture_worker:
             self._capture_stopping = True
             self.ui.capture_button.setEnabled(False)
@@ -607,10 +654,18 @@ class UiMainWindow(QMainWindow):
         self.capture_dialog = None
         if dialog:
             dialog.deleteLater( )
-        if self._capture_warnings:
-            messages = '\n'.join(self._capture_warnings)
-            self._capture_warnings = []
-            QtCore.QTimer.singleShot(0, lambda: self.show_notice(messages))
+        if self._capture_warnings and not self._closing:
+            QtCore.QTimer.singleShot(0, self._show_capture_warnings)
+
+    def _show_capture_warnings(self):
+        if not self._capture_warnings or (self._closing and self._has_background_work( )):
+            return
+        messages = '\n'.join(self._capture_warnings)
+        self._capture_warnings = []
+        if self._closing:
+            show_warning(self, '退出前请检查代理设置', messages)
+        else:
+            self.show_notice(messages)
     
     def on_capture_error(self, message):
         self._capture_error = True
@@ -620,12 +675,18 @@ class UiMainWindow(QMainWindow):
     def on_capture_finished(self):
         worker = self.capture_worker
         self.capture_worker = None
+        if worker:
+            worker.deleteLater( )
+        if self._closing:
+            self._captured_token = None
+            if self.capture_dialog:
+                self.capture_dialog.finish( )
+            self._close_when_idle( )
+            return
         self.set_ui_enabled(True)
         self.ui.capture_button.setText('获取 Token')
         self.ui.login.setEnabled(True)
         self.ui.token_input.setEnabled(True)
-        if worker:
-            worker.deleteLater( )
         success = bool(self._captured_token and not self._capture_stopping and not self._capture_error)
         if self.capture_dialog:
             self.capture_dialog.finish(success = success, error = self._capture_error)
@@ -662,35 +723,53 @@ class UiMainWindow(QMainWindow):
         self.ui.settings_button.setEnabled(enabled)
         self.ui.stop_task.setEnabled(not enabled)
     
+    def _has_background_work(self):
+        # Keep workers alive until their queued finished callbacks have run.
+        return any(worker is not None for worker in (
+            self.login_worker, self.task_list_worker, self.capture_worker, self.task_worker))
+
+    def _close_when_idle(self):
+        if self._closing and not self._has_background_work( ):
+            QtCore.QTimer.singleShot(0, self.close)
+
     def closeEvent(self, a0):
-        if self.task_list_worker and self.task_list_worker.isRunning( ):
-            self.task_list_worker.wait( )
-        if self.capture_worker and self.capture_worker.isRunning( ):
-            self.capture_worker.stop( )
-            self.capture_worker.wait( )
-        if self.task_worker and self.task_worker.isRunning( ):
-            self.task_worker.stop( )
-            self.task_worker.wait( )
-        if self.login_worker and self.login_worker.isRunning( ):
-            self.login_worker.wait( )
-        if a0 is not None:
-            a0.accept( )
+        if a0 is None:
+            return
+        if not self._closing:
+            self._closing = True
+            self.set_ui_enabled(False)
+            self.ui.stop_task.setEnabled(False)
+            self.ui.warn_info.setText('正在停止后台任务并清理资源…')
+            self.ui.warn_info.show( )
+            if self.settings:
+                self.settings.close( )
+            if self._notice_dialog:
+                self._notice_dialog.close( )
+            for worker in (self.login_worker, self.task_list_worker):
+                if worker is not None:
+                    worker.requestInterruption( )
+            for worker in (self.task_worker, self.capture_worker):
+                if worker is not None:
+                    worker.stop( )
+        if self._has_background_work( ):
+            a0.ignore( )
+            return
+        if self.capture_dialog:
+            self.capture_dialog.finish( )
+        self._show_capture_warnings( )
+        a0.accept( )
     
     def stop_current_task(self):
-        """
-        停止当前任务
-        :return:
-        """
-        if self.task_worker and self.task_worker.isRunning( ):
-            if confirm_action(self, "确认停止", "确定要停止当前任务吗？", confirm_text = "停止任务"):
-                self.task_worker.stop( )
-                self.task_worker.quit( )
-                self.task_worker.wait( )
-                self._batch_mode = False
-                self.set_ui_enabled(True)
-                self._hide_task_progress( )
-                show_information(self, "任务停止", "任务已停止")
-                self.task_worker = None
-                self.main_logger.info("任务已手动停止")
-        else:
+        """Request cancellation without blocking the GUI on an in-flight request."""
+        worker = self.task_worker
+        if worker is None or not worker.isRunning( ) or self._task_stopping:
             return
+        if not confirm_action(self, '确认停止', '确定要停止当前任务吗？', confirm_text = '停止任务'):
+            return
+        # The worker can finish while the confirmation dialog runs its event loop.
+        if self.task_worker is not worker:
+            return
+        self._task_stopping = True
+        self.ui.stop_task.setEnabled(False)
+        self.ui.progress_label.setText('正在停止，等待当前请求结束…')
+        worker.stop( )

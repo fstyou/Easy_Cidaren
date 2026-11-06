@@ -2,7 +2,7 @@
 
 from PyQt6 import QtWidgets
 
-from easy_cidaren.app_logging.config import Log
+from easy_cidaren.app_logging.config import get_logger
 from easy_cidaren.paths import ASSETS_DIR
 from easy_cidaren.ui.dialogs import select_file, show_error, show_warning
 from easy_cidaren.ui.styles import DIALOG_STYLE
@@ -44,10 +44,10 @@ class SettingsWindow(QtWidgets.QDialog):
         timing = QtWidgets.QGroupBox('答题')
         timing_layout = QtWidgets.QFormLayout(timing)
         timing_layout.setSpacing(10)
-        self.min_time = self._seconds(public_info.min_time)
-        self.max_time = self._seconds(public_info.max_time)
-        self.min_time_2 = self._seconds(public_info.spend_min_time)
-        self.max_time_2 = self._seconds(public_info.spend_max_time)
+        self.min_time = self._seconds(public_info.settings.min_time)
+        self.max_time = self._seconds(public_info.settings.max_time)
+        self.min_time_2 = self._seconds(public_info.settings.spend_min_time)
+        self.max_time_2 = self._seconds(public_info.settings.spend_max_time)
         timing_layout.addRow('题目间隔', self._range(self.min_time, self.max_time))
         timing_layout.addRow('提交用时', self._range(self.min_time_2, self.max_time_2))
         layout.addWidget(timing)
@@ -60,18 +60,18 @@ class SettingsWindow(QtWidgets.QDialog):
         self.theme_choice = QtWidgets.QComboBox( )
         for label, value in (('跟随系统', 'system'), ('浅色', 'light'), ('深色', 'dark')):
             self.theme_choice.addItem(label, value)
-        self.theme_choice.setCurrentIndex(max(0, self.theme_choice.findData(getattr(public_info, 'theme', 'system'))))
+        self.theme_choice.setCurrentIndex(self.theme_choice.findData(public_info.settings.theme))
         theme_row.addWidget(self.theme_choice)
         theme_row.addStretch( )
         general_layout.addLayout(theme_row)
         self.br_checkBox = QtWidgets.QCheckBox('启用 Brotli 压缩（下次登录时生效）')
-        self.br_checkBox.setChecked(public_info.br_choices)
+        self.br_checkBox.setChecked(public_info.settings.br_choices)
         self.playMusicCheckBox = QtWidgets.QCheckBox('任务完成时播放提示音')
-        self.playMusicCheckBox.setChecked(public_info.play_music)
+        self.playMusicCheckBox.setChecked(public_info.settings.play_music)
         general_layout.addWidget(self.br_checkBox)
         general_layout.addWidget(self.playMusicCheckBox)
         music_row = QtWidgets.QHBoxLayout( )
-        self.musicPathLineEdit = QtWidgets.QLineEdit(public_info.music_path)
+        self.musicPathLineEdit = QtWidgets.QLineEdit(public_info.settings.music_path)
         self.musicPathLineEdit.setPlaceholderText('使用默认提示音')
         self.selectMusicBtn = QtWidgets.QPushButton('选择文件')
         self.defaultMusicBtn = QtWidgets.QPushButton('恢复默认')
@@ -119,26 +119,22 @@ class SettingsWindow(QtWidgets.QDialog):
             self.musicPathLineEdit.setText(path)
     
     def save(self):
-        if self.min_time.value( ) > self.max_time.value( ):
-            show_warning(self, '无法保存', '最长间隔不能短于最短间隔')
-            return
-        if self.min_time_2.value( ) > self.max_time_2.value( ):
-            show_warning(self, '无法保存', '最长用时不能短于最短用时')
-            return
-        compressed = self.br_checkBox.isChecked( )
         try:
-            self.public_info.input_info(
-                    self.min_time.value( ), self.max_time.value( ),
-                    self.min_time_2.value( ), self.max_time_2.value( ), compressed,
-                    'gzip, deflate, br' if compressed else 'gzip, deflate',
-                    self.playMusicCheckBox.isChecked( ), self.musicPathLineEdit.text( ).strip( ),
-                    self.theme_choice.currentData( ),
+            self.public_info.save_settings(
+                    min_time = self.min_time.value( ), max_time = self.max_time.value( ),
+                    spend_min_time = self.min_time_2.value( ), spend_max_time = self.max_time_2.value( ),
+                    br_choices = self.br_checkBox.isChecked( ), play_music = self.playMusicCheckBox.isChecked( ),
+                    music_path = self.musicPathLineEdit.text( ).strip( ), theme = self.theme_choice.currentData( ),
             )
-        except (OSError, ValueError, TypeError) as exc:
-            Log('settings').logger.exception('保存设置失败')
+        except ValueError as exc:
+            show_warning(self, '无法保存', str(exc))
+            return
+        except (OSError, TypeError) as exc:
+            get_logger('settings').exception('保存设置失败')
             show_error(self, '保存失败', f'无法保存设置：{exc}')
             return
-        Log('settings').logger.info('设置已保存')
-        if manager( ):
-            manager( ).set_mode(self.theme_choice.currentData( ))
+        get_logger('settings').info('设置已保存')
+        theme = manager( )
+        if theme:
+            theme.set_mode(self.theme_choice.currentData( ))
         self.accept( )

@@ -1,11 +1,11 @@
 import unittest
-from types import SimpleNamespace
+from unittest.mock import Mock
 
 from easy_cidaren.api.response import CardDataError, SecurityVerifyError, handle_response
 
 
 def response(**data):
-    return SimpleNamespace(json = lambda: data, text = 'response')
+    return Mock(json = lambda: data, text = 'response')
 
 
 class ApiResponseTests(unittest.TestCase):

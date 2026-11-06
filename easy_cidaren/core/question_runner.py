@@ -6,7 +6,7 @@ class QuestionSkipError(Exception):
 
 
 def run_questions(info, *, running, answer, submit, read, skip, progress,
-                  notice, logger, security_error, delay):
+                  notice, logger, fatal_errors, delay):
     while running( ) and info.exam != 'complete':
         exam = info.exam
         try:
@@ -20,34 +20,37 @@ def run_questions(info, *, running, answer, submit, read, skip, progress,
                 read(info)
             else:
                 option = answer(info, mode)
+                if not running( ):
+                    return
                 if option is None:
                     raise ValueError('未能找到可提交的答案')
                 submit(info, option)
-        except (security_error, QuestionSkipError):
+        except fatal_errors:
+            raise
+        except QuestionSkipError:
             raise
         except Exception as exc:
+            if not running( ):
+                return
             logger.exception('【题目异常】题型 %s 处理失败，尝试跳过',
                              exam.get('topic_mode', '?') if isinstance(exam, dict) else '?')
             if info.exam == 'complete' or (
                     isinstance(info.exam, dict) and info.exam.get('topic_code') != exam.get('topic_code')):
                 notice('⚠ 当前题目处理异常，但服务端已进入下一题，继续执行')
-                progress( )
-                continue
-            if not running( ):
-                return
-            try:
-                # Keep the latest topic_code: a partial submission may have updated it.
-                skip(info)
-                if isinstance(info.exam, dict) and info.exam.get('topic_code') == exam.get('topic_code'):
-                    raise QuestionSkipError('跳过后服务端仍返回同一道题')
-            except security_error:
-                raise
-            except Exception as skip_exc:
-                logger.exception('【跳过失败】无法继续当前任务')
-                raise QuestionSkipError(f'跳过题目失败：{skip_exc}') from skip_exc
-            info.skip_count += 1
-            logger.warning('【题目已跳过】继续下一题')
-            notice(f'⚠ 题目处理失败，已跳过并继续：{type(exc).__name__}：{exc}')
+            else:
+                try:
+                    # Keep the latest topic_code: a partial submission may have updated it.
+                    skip(info)
+                    if isinstance(info.exam, dict) and info.exam.get('topic_code') == exam.get('topic_code'):
+                        raise QuestionSkipError('跳过后服务端仍返回同一道题')
+                except fatal_errors:
+                    raise
+                except Exception as skip_exc:
+                    logger.exception('【跳过失败】无法继续当前任务')
+                    raise QuestionSkipError(f'跳过题目失败：{skip_exc}') from skip_exc
+                info.skip_count += 1
+                logger.warning('【题目已跳过】继续下一题')
+                notice(f'⚠ 题目处理失败，已跳过并继续：{type(exc).__name__}：{exc}')
         progress( )
         if running( ) and info.exam != 'complete':
             delay( )

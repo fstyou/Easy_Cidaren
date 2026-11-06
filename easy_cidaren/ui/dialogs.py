@@ -3,33 +3,17 @@
 import os
 from typing import cast
 
-from PyQt6 import QtCore, QtGui
+from PyQt6 import QtCore
 from PyQt6.QtWidgets import QAbstractButton, QFileDialog, QMessageBox
 
 from easy_cidaren.ui.styles import DIALOG_STYLE
-from easy_cidaren.ui.theme import _DARK_COLORS, manager
+from easy_cidaren.ui.theme import manager, themed_palette
 
 
 def _apply_dialog_style(dialog):
-    palette = QtGui.QPalette(dialog.palette( ))
-    for role, color in (
-            (QtGui.QPalette.ColorRole.Window, '#f4f6f9'),
-            (QtGui.QPalette.ColorRole.WindowText, '#263548'),
-            (QtGui.QPalette.ColorRole.Base, '#ffffff'),
-            (QtGui.QPalette.ColorRole.AlternateBase, '#f4f6f9'),
-            (QtGui.QPalette.ColorRole.Text, '#263548'),
-            (QtGui.QPalette.ColorRole.Button, '#edf2f7'),
-            (QtGui.QPalette.ColorRole.ButtonText, '#29415f'),
-            (QtGui.QPalette.ColorRole.Highlight, '#3269bd'),
-            (QtGui.QPalette.ColorRole.HighlightedText, '#ffffff'),
-            (QtGui.QPalette.ColorRole.ToolTipBase, '#ffffff'),
-            (QtGui.QPalette.ColorRole.ToolTipText, '#263548'),
-    ):
-        theme = manager( )
-        if theme and theme.dark and role != QtGui.QPalette.ColorRole.HighlightedText:
-            color = _DARK_COLORS.get(color, color)
-        palette.setColor(role, QtGui.QColor(color))
-    dialog.setPalette(palette)
+    theme = manager( )
+    dialog.setProperty('_theme_managed_dialog', True)
+    dialog.setPalette(themed_palette(dialog.palette( ), bool(theme and theme.dark)))
     dialog.setStyleSheet(DIALOG_STYLE + '''
         QLineEdit, QComboBox, QAbstractItemView, QHeaderView::section {
             background: white; color: #263548;
@@ -53,15 +37,22 @@ def create_message(parent, title, message, icon, button_text = "知道了"):
 
 
 def show_information(parent, title, message):
-    return create_message(parent, title, message, QMessageBox.Icon.Information).exec( )
+    return _exec_message(create_message(parent, title, message, QMessageBox.Icon.Information))
 
 
 def show_warning(parent, title, message):
-    return create_message(parent, title, message, QMessageBox.Icon.Warning).exec( )
+    return _exec_message(create_message(parent, title, message, QMessageBox.Icon.Warning))
 
 
 def show_error(parent, title, message):
-    return create_message(parent, title, message, QMessageBox.Icon.Critical).exec( )
+    return _exec_message(create_message(parent, title, message, QMessageBox.Icon.Critical))
+
+
+def _exec_message(dialog):
+    try:
+        return dialog.exec( )
+    finally:
+        dialog.deleteLater( )
 
 
 def confirm_action(parent, title, message, *, confirm_text, detail = "", default_confirm = False):
@@ -78,7 +69,7 @@ def confirm_action(parent, title, message, *, confirm_text, detail = "", default
     cast(QAbstractButton, dialog.button(QMessageBox.StandardButton.No)).setText("取消")
     dialog.setEscapeButton(QMessageBox.StandardButton.No)
     dialog.setDefaultButton(QMessageBox.StandardButton.Yes if default_confirm else QMessageBox.StandardButton.No)
-    return dialog.exec( ) == QMessageBox.StandardButton.Yes
+    return _exec_message(dialog) == QMessageBox.StandardButton.Yes
 
 
 def select_file(parent, title, path, name_filter, *, save = False):
@@ -97,10 +88,13 @@ def select_file(parent, title, path, name_filter, *, save = False):
     dialog.setLabelText(QFileDialog.DialogLabel.FileType, "文件类型：")
     if path:
         dialog.selectFile(path)
-    while dialog.exec( ) == QFileDialog.DialogCode.Accepted:
-        selected = dialog.selectedFiles( )[0]
-        if not save or not os.path.exists(selected) or confirm_action(
-                parent, "确认覆盖", "该文件已存在，是否覆盖？",
-                confirm_text = "覆盖", detail = selected):
-            return selected
-    return ""
+    try:
+        while dialog.exec( ) == QFileDialog.DialogCode.Accepted:
+            selected = dialog.selectedFiles( )[0]
+            if not save or not os.path.exists(selected) or confirm_action(
+                    parent, "确认覆盖", "该文件已存在，是否覆盖？",
+                    confirm_text = "覆盖", detail = selected):
+                return selected
+        return ""
+    finally:
+        dialog.deleteLater( )

@@ -1,8 +1,8 @@
 """Validate service responses and report protocol errors."""
 
-from easy_cidaren.app_logging.config import Log
+from easy_cidaren.app_logging.config import get_logger
 
-logger = Log('api_response').logger
+logger = get_logger('api_response')
 
 
 class CardDataError(Exception):
@@ -13,7 +13,20 @@ class SecurityVerifyError(Exception):
     """The service requires the user to complete security verification."""
 
 
+class UnsafeRequestError(Exception):
+    """The result of a state-changing request is uncertain and must not be repeated."""
+
+
+class UnknownObfuscationError(UnsafeRequestError):
+    """The response uses an unknown obfuscation version."""
+
+
+class WordSelectionRequiredError(Exception):
+    """The service requires words to be selected before answering can continue."""
+
+
 def handle_response(response, *, task = False):
+    response.raise_for_status( )
     data = response.json( )
     code = data['code']
     logger.debug('接口响应：%s', response.text, extra = {'file_only': True})

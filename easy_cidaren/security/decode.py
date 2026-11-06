@@ -2,9 +2,9 @@ import base64
 import json
 from typing import TypedDict
 
-from easy_cidaren.app_logging.config import Log
+from easy_cidaren.app_logging.config import get_logger
 
-bs64 = Log("base64")
+bs64 = get_logger("base64")
 
 JV_TWO = {
     '2_1254': [0, 1, 2, 4, 5, 36, 47, 48, 59, 96, 107],
@@ -38,9 +38,6 @@ JV_THREE: dict[str, DecodeConfig] = {
         "avg": 5, "loc": [3, 1, 0, 4, 2]
     },
 }
-
-DEFAULT_JV_TWO = JV_TWO['2_9214']
-
 
 def _decode_json(data: str) -> dict:
     text = base64.b64decode(data.encode( )).decode( )
@@ -88,7 +85,7 @@ def debase64(data: dict | str, jv: str | int | None = 0):
         raise ValueError('待解码数据必须为字符串')
     
     jv = str(jv or '')
-    bs64.logger.debug("开始解码 jv=%s，数据：%s", jv, data, extra = {'file_only': True})
+    bs64.debug("开始解码 jv=%s，数据：%s", jv, data, extra = {'file_only': True})
     try:
         return _decode_json(data)
     except (ValueError, UnicodeError):
@@ -107,7 +104,7 @@ def debase64(data: dict | str, jv: str | int | None = 0):
             out += d[cfg["avg"] * chunk:]
             clean_data = out
         else:
-            clean_data = strip_noise(data, DEFAULT_JV_TWO)
+            raise ValueError(f'不支持的数据编码版本：{jv}')
         
-        bs64.logger.debug("去除混淆后：%s", clean_data, extra = {'file_only': True})
+        bs64.debug("去除混淆后：%s", clean_data, extra = {'file_only': True})
         return _decode_json(clean_data)

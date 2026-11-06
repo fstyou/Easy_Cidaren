@@ -41,7 +41,30 @@ def themed_style(style, dark):
     return re.sub(r'#[0-9a-fA-F]{6}\b', replace, style)
 
 
+def themed_palette(base, dark):
+    palette = QtGui.QPalette(base)
+    colors = {
+        QtGui.QPalette.ColorRole.Window: '#1e2530' if dark else '#f4f6f9',
+        QtGui.QPalette.ColorRole.WindowText: '#e1e8f0' if dark else '#263548',
+        QtGui.QPalette.ColorRole.Base: '#273240' if dark else '#ffffff',
+        QtGui.QPalette.ColorRole.AlternateBase: '#303d4d' if dark else '#f4f6f9',
+        QtGui.QPalette.ColorRole.Text: '#e1e8f0' if dark else '#263548',
+        QtGui.QPalette.ColorRole.Button: '#35465a' if dark else '#edf2f7',
+        QtGui.QPalette.ColorRole.ButtonText: '#e0ebf7' if dark else '#29415f',
+        QtGui.QPalette.ColorRole.Highlight: '#3978d0' if dark else '#3269bd',
+        QtGui.QPalette.ColorRole.HighlightedText: '#ffffff',
+        QtGui.QPalette.ColorRole.Link: '#8bbcff' if dark else '#3269bd',
+        QtGui.QPalette.ColorRole.ToolTipBase: '#273240' if dark else '#ffffff',
+        QtGui.QPalette.ColorRole.ToolTipText: '#e1e8f0' if dark else '#263548',
+    }
+    for role, color in colors.items( ):
+        palette.setColor(role, QtGui.QColor(color))
+    return palette
+
+
 class ThemeManager(QtCore.QObject):
+    changed = QtCore.pyqtSignal(bool)
+
     def __init__(self, app, mode = 'system'):
         super( ).__init__(app)
         self.app = app
@@ -51,8 +74,7 @@ class ThemeManager(QtCore.QObject):
         self._updating = False
         app.installEventFilter(self)
         hints = app.styleHints( )
-        if hasattr(hints, 'colorSchemeChanged'):
-            hints.colorSchemeChanged.connect(self._system_changed)
+        hints.colorSchemeChanged.connect(self._system_changed)
         self.apply( )
 
     def _system_changed(self, *_args):
@@ -69,39 +91,17 @@ class ThemeManager(QtCore.QObject):
                        (scheme == QtCore.Qt.ColorScheme.Unknown and
                         self.system_palette.color(QtGui.QPalette.ColorRole.Window).lightness( ) < 128))
         self.dark = self.mode == 'dark' or (self.mode == 'system' and system_dark)
-        palette = QtGui.QPalette(self.system_palette)
-        colors = {
-            QtGui.QPalette.ColorRole.Window: '#1e2530' if self.dark else '#f4f6f9',
-            QtGui.QPalette.ColorRole.WindowText: '#e1e8f0' if self.dark else '#263548',
-            QtGui.QPalette.ColorRole.Base: '#273240' if self.dark else '#ffffff',
-            QtGui.QPalette.ColorRole.AlternateBase: '#303d4d' if self.dark else '#f4f6f9',
-            QtGui.QPalette.ColorRole.Text: '#e1e8f0' if self.dark else '#263548',
-            QtGui.QPalette.ColorRole.Button: '#35465a' if self.dark else '#edf2f7',
-            QtGui.QPalette.ColorRole.ButtonText: '#e0ebf7' if self.dark else '#29415f',
-            QtGui.QPalette.ColorRole.Highlight: '#3978d0' if self.dark else '#3269bd',
-            QtGui.QPalette.ColorRole.HighlightedText: '#ffffff',
-            QtGui.QPalette.ColorRole.Link: '#8bbcff' if self.dark else '#3269bd',
-            QtGui.QPalette.ColorRole.ToolTipBase: '#273240' if self.dark else '#ffffff',
-            QtGui.QPalette.ColorRole.ToolTipText: '#e1e8f0' if self.dark else '#263548',
-        }
-        for role, color in colors.items( ):
-            palette.setColor(role, QtGui.QColor(color))
+        palette = themed_palette(self.system_palette, self.dark)
         self.app.setPalette(palette)
         self._updating = True
         try:
             for widget in self.app.allWidgets( ):
+                if widget.property('_theme_managed_dialog'):
+                    widget.setPalette(palette)
                 self._style_widget(widget)
-                if isinstance(widget, QtWidgets.QTableWidget):
-                    for row in range(widget.rowCount( )):
-                        for column in range(1, widget.columnCount( )):
-                            item = widget.item(row, column)
-                            task = item.data(QtCore.Qt.ItemDataRole.UserRole) if item else None
-                            if isinstance(task, dict) and task.get('progress', 0) >= 100:
-                                item.setForeground(QtGui.QColor('#79d6a7' if self.dark else '#196b4b'))
-                            elif isinstance(task, dict) and task.get('over_status') == 1:
-                                item.setForeground(QtGui.QColor('#a8b9cc' if self.dark else '#65758a'))
         finally:
             self._updating = False
+        self.changed.emit(self.dark)
 
     def _style_widget(self, widget):
         style = widget.styleSheet( )
@@ -115,15 +115,18 @@ class ThemeManager(QtCore.QObject):
         if style != themed:
             widget.setStyleSheet(themed)
 
-    def eventFilter(self, watched, event):
-        if not self._updating and event.type( ) == QtCore.QEvent.Type.Show and isinstance(watched, QtWidgets.QWidget):
+    def eventFilter(self, a0: QtCore.QObject | None, a1: QtCore.QEvent | None) -> bool:
+        if (not self._updating and a1 is not None
+                and a1.type( ) in (QtCore.QEvent.Type.Show, QtCore.QEvent.Type.StyleChange)
+                and isinstance(a0, QtWidgets.QWidget)):
             self._updating = True
             try:
-                self._style_widget(watched)
+                self._style_widget(a0)
             finally:
                 self._updating = False
         return False
 
 
-def manager( ):
-    return getattr(QtWidgets.QApplication.instance( ), '_theme_manager', None)
+def manager( ) -> ThemeManager | None:
+    app = QtWidgets.QApplication.instance( )
+    return app.findChild(ThemeManager) if app else None

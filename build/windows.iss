@@ -7,9 +7,6 @@
 #ifndef OutputDir
   #error OutputDir is required
 #endif
-#ifndef AppArch
-  #error AppArch is required
-#endif
 #ifndef InnoArch
   #error InnoArch is required
 #endif

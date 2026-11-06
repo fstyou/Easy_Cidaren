@@ -68,6 +68,10 @@ jobs:
                 with:
                     python-version: '3.12'
                     architecture: ${{ runner.arch == 'ARM64' && 'arm64' || 'x64' }}
+                    cache: pip
+                    cache-dependency-path: |
+                        requirements.txt
+                        build/requirements.txt
             -
                 name: Install Linux build tools and Qt libraries
                 if: runner.os == 'Linux'
@@ -88,18 +92,20 @@ jobs:
                 name: Install Python dependencies
                 run: python -m pip install -r requirements.txt -r build/requirements.txt
             -
-                name: Check dependencies and run unit tests
-                run: |
-                    python -m pip check
-                    python -m unittest discover -s tests -v
+                name: Check dependencies
+                run: python -m pip check
             -
-                name: Check GUI and language model
+                name: Run unit tests
+                run: python -m unittest discover -s tests -v
+            -
+                name: Check GUI
                 env:
                     QT_QPA_PLATFORM: offscreen
                     PYTHONFAULTHANDLER: '1'
-                run: |
-                    python -u tests/gui_smoke.py
-                    python -c "from PyQt6.QtWidgets import QApplication; import spacy; from easy_cidaren.paths import MODEL_DIR; app = QApplication([]); spacy.load(MODEL_DIR)"
+                run: python -u tests/gui_smoke.py
+            -
+                name: Check language model
+                run: python -c "import spacy; from easy_cidaren.paths import MODEL_DIR; spacy.load(MODEL_DIR)"
             -
                 name: Build packages
                 run: python build/build.py ${{ matrix.target }}
@@ -117,3 +123,4 @@ jobs:
                     path: ${{ matrix.files }}
                     if-no-files-found: error
                     retention-days: 14
+                    compression-level: 0

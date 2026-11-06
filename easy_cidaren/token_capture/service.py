@@ -8,12 +8,12 @@ import time
 from enum import Enum, auto
 from pathlib import Path
 
-from easy_cidaren.app_logging.config import Log
+from easy_cidaren.app_logging.config import get_logger
 from easy_cidaren.token_capture.proxy_manager import ProxyManager
 from easy_cidaren.token_capture.token_store import SAVED_TOKEN_FILE
 from easy_cidaren.utils.executables import find_mitmdump
 
-service_logger = Log("token_capture_service").logger
+service_logger = get_logger("token_capture_service")
 class CaptureStatus(Enum):
     MANUAL_PROXY = auto( )
     CERT_TRUST = auto( )
@@ -35,6 +35,7 @@ class TokenCaptureService:
         self.capture_directory = capture_directory
         self.mitm_process = None
         self.proxy_manager = None
+        self._proxy_attempted = False
         self._is_running = False
         self._stop_requested = threading.Event( )
         self._cleanup_lock = threading.Lock( )
@@ -81,6 +82,7 @@ class TokenCaptureService:
             
             # 启用代理
             service_logger.info("正在启用系统代理 127.0.0.1:8888")
+            self._proxy_attempted = True
             self.proxy_manager.enable_proxy( )
             if self._stop_requested.is_set( ):
                 return None
@@ -158,7 +160,7 @@ class TokenCaptureService:
                                 error_callback(f"读取 token 文件失败: {e}")
                             return None
                 
-                time.sleep(0.5)
+                self._stop_requested.wait(0.5)
         
         except Exception as e:
             service_logger.error(f"捕获流程发生错误: {e}")
@@ -181,15 +183,15 @@ class TokenCaptureService:
     def _ensure_mitm_cert_ready(self, status_callback = None):
         """等待 mitmproxy 首次运行生成证书并自动导入系统证书库"""
         cert_path = Path.home( ) / ".mitmproxy" / "mitmproxy-ca-cert.cer"
-        deadline = time.time( ) + 15
-        while time.time( ) < deadline:
+        deadline = time.monotonic( ) + 15
+        while time.monotonic( ) < deadline:
             if self._stop_requested.is_set( ):
                 return
             if cert_path.exists( ):
                 break
             if self.mitm_process.poll( ) is not None:
                 raise RuntimeError("mitmproxy 在生成证书前已退出")
-            time.sleep(0.5)
+            self._stop_requested.wait(0.5)
         
         if not cert_path.exists( ):
             raise RuntimeError(f"等待 mitmproxy 证书生成超时：{cert_path}")
@@ -201,8 +203,10 @@ class TokenCaptureService:
             try:
                 self.proxy_manager.ensure_windows_mitm_cert( )
                 service_logger.info("mitmproxy 证书导入完成")
-            except Exception as e:
-                service_logger.error(f"导入 mitmproxy 证书失败: {e}")
+            except RuntimeError as exc:
+                service_logger.warning("自动导入证书失败：%s", exc)
+                if status_callback:
+                    status_callback(CaptureStatus.CERT_TRUST, f"自动导入失败，请手动信任 mitmproxy 证书：{cert_path}")
         elif sys.platform != "win32":
             service_logger.info("非 Windows 系统，请手动信任 mitmproxy 证书")
             if status_callback:
@@ -235,7 +239,7 @@ class TokenCaptureService:
                 status_callback(CaptureStatus.WARNING, "无法停止 token 代理进程，请检查并手动关闭")
         
         try:
-            if self.proxy_manager:
+            if self.proxy_manager and self._proxy_attempted:
                 service_logger.info("正在恢复系统代理")
                 self.proxy_manager.disable_proxy( )
                 service_logger.info("系统代理已恢复")

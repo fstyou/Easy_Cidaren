@@ -28,7 +28,7 @@ class CaptureAddonTests(unittest.TestCase):
                     host = 'app.vocabgo.com', headers = {'UserToken': 'test-token'})))
             self.assertEqual((Path(directory) / 'last_token.txt').read_text(encoding = 'utf-8'), 'test-token')
             self.assertEqual([p.name for p in Path(directory).iterdir( )], ['last_token.txt'])
-            with patch.object(module.os, 'replace', side_effect = OSError('failed')):
+            with patch.object(os, 'replace', side_effect = OSError('failed')):
                 with self.assertRaises(OSError):
                     catcher.response(types.SimpleNamespace(request = types.SimpleNamespace(
                             host = 'app.vocabgo.com', headers = {'UserToken': 'new-token'})))

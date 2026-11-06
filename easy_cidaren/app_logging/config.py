@@ -29,15 +29,11 @@ clean_old_logs( )
 timestamp = datetime.datetime.now( ).strftime("%Y%m%d_%H%M%S")
 log_filename = os.path.join(log_dir, f"app_{timestamp}.log")
 
-# logger变量
-logger_instance = None
-
 
 def setup_logger( ):
     """
     配置日志格式和处理器
     """
-    global logger_instance
     logger_instance = logging.getLogger( )
     logger_instance.setLevel(logging.DEBUG)
     
@@ -64,26 +60,11 @@ def setup_logger( ):
     console_handler.setFormatter(ConsoleFormatter( ))
     logger_instance.addHandler(console_handler)
     logging.getLogger('urllib3').setLevel(logging.WARNING)
-    
-    return logger_instance
 
 
 # 初始化日志
 setup_logger( )
 
 
-class Log:
-    def __init__(self, logger_name: str):
-        self.logger = logging.getLogger(logger_name)
-    
-    def info(self, message, *args, **kwargs):
-        self.logger.info(message, *args, **kwargs)
-    
-    def error(self, message, *args, **kwargs):
-        self.logger.error(message, *args, **kwargs)
-    
-    def warning(self, message, *args, **kwargs):
-        self.logger.warning(message, *args, **kwargs)
-    
-    def debug(self, message, *args, **kwargs):
-        self.logger.debug(message, *args, **kwargs)
+def get_logger(name: str) -> logging.Logger:
+    return logging.getLogger(name)

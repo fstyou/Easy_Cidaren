@@ -4,23 +4,24 @@ import re
 import time
 from urllib.parse import unquote
 
-from easy_cidaren.api.response import CardDataError
+from easy_cidaren.api.response import CardDataError, UnsafeRequestError
 from easy_cidaren.api.tasks import (
     query_word,
     submit_result,
     next_exam,
 )
-from easy_cidaren.app_logging.config import Log
+from easy_cidaren.app_logging.config import get_logger
 from easy_cidaren.core.answer_library import lookup, lookup_word
 from easy_cidaren.core.answer_result import record_answer_result
-from easy_cidaren.core.answer_selection import select_mean, handle_query_word_mean, filler_option, select_match_word, \
+from easy_cidaren.core.answer_selection import select_mean, handle_query_word_mean, filler_option, source_options, \
+    select_match_word, \
     word_examples, \
     is_word_exist
 from easy_cidaren.core.public_info import PublicInfo
 from easy_cidaren.utils.helpers import delete_other_char
 from easy_cidaren.utils.word_revert import word_revert
 
-query_answer = Log('answer_questions')
+query_answer = get_logger('answer_questions')
 
 
 def _current_exam(public_info) -> dict:
@@ -127,7 +128,7 @@ def _build_phrase_answer(public_info, phrase: str) -> str:
         picked = cand
     if not picked:
         return delete_other_char(phrase)
-    query_answer.logger.debug(f"短语过滤固定词:{cand} -> {picked}")
+    query_answer.debug(f"短语过滤固定词:{cand} -> {picked}")
     return ','.join(picked)
 
 
@@ -154,34 +155,47 @@ def _match_phrase_by_word_zh(public_info, word_mean) -> str | None:
 
 
 # submit
-def submit(public_info: PublicInfo, option: int | str | dict):
+def submit(public_info: PublicInfo, option: int | str | dict, *, running = lambda: True, wait = time.sleep):
     """
     提交答案
     :param public_info:
     :param option: 选项索引或单词
+    :param running: 是否仍允许提交答案
+    :param wait: 可中断的等待函数
     :return: None
     """
     public_info.topic_code = _current_exam(public_info)['topic_code']
+    if isinstance(option, dict) and not option:
+        raise ValueError('题目没有可提交的答案')
     # submit result
-    if type(option) == dict:
-        # resolve mode == 31
-        for answer_index in option.values( ):
-            record_answer_result(public_info, submit_result(public_info, answer_index))
-    else:
-        record_answer_result(public_info, submit_result(public_info, option))
+    answers = option.values( ) if isinstance(option, dict) else (option,)
+    for answer_index in answers:
+        if not running( ):
+            return
+        result = submit_result(public_info, answer_index)
+        try:
+            record_answer_result(public_info, result)
+        except (KeyError, TypeError, ValueError, AttributeError, OSError) as exc:
+            raise UnsafeRequestError('答案已提交，但处理答题结果失败；请先检查任务状态') from exc
     #
-    time.sleep(random.randint(1, 2))
+    if not running( ):
+        return
+    wait(random.randint(1, 2))
+    if not running( ):
+        return
     # get next exam
     next_exam(public_info)
 
 
 # skip read word
-def jump_read(public_info):
+def jump_read(public_info, *, running = lambda: True, wait = time.sleep):
     """
     跳过阅读卡片
     """
-    time.sleep(random.randint(1, 3))
-    query_answer.logger.debug("跳过阅读单词卡片")
+    wait(random.randint(1, 3))
+    if not running( ):
+        return
+    query_answer.debug("跳过阅读单词卡片")
     next_exam(public_info)
     if isinstance(public_info.exam, dict):
         public_info.topic_code = _current_exam(public_info)['topic_code']
@@ -190,11 +204,11 @@ def jump_read(public_info):
 # mean form word
 def select_word(public_info) -> int | str | None:
     word_mean = public_info.exam['stem']['remark']
-    query_answer.logger.debug("汉译英:" + word_mean)
+    query_answer.debug("汉译英:" + word_mean)
     # 本地答案库命中优先(标准答案,按题目 options 过滤固定词后逗号提交)
     lib_answers = lookup(word_mean)
     if lib_answers:
-        query_answer.logger.debug(f"答案库命中:{lib_answers[0]}")
+        query_answer.debug(f"答案库命中:{lib_answers[0]}")
         return _build_phrase_answer(public_info, lib_answers[0])
     # option word
     options = filler_option(public_info)
@@ -222,9 +236,9 @@ def select_word(public_info) -> int | str | None:
     # 词表短语兜底: 术语课程按中文释义反查英文短语
     phrase = _match_phrase_by_word_zh(public_info, word_mean)
     if phrase:
-        query_answer.logger.debug(f"词表匹配到短语:{phrase}")
+        query_answer.debug(f"词表匹配到短语:{phrase}")
         return _build_phrase_answer(public_info, unquote(phrase))
-    query_answer.logger.debug("查询失败,准备跳过")
+    query_answer.debug("查询失败,准备跳过")
     return None
 
 
@@ -234,13 +248,13 @@ def word_form_mean(public_info: PublicInfo) -> int | None:
     :param public_info:
     :return:
     """
-    query_answer.logger.debug("英译汉")
+    query_answer.debug("英译汉")
     # is listen
     exam = _current_exam(public_info)['stem']['content'].replace(' ', "")
     # 题干格式xxx{word}xxx
-    query_answer.logger.debug(f"从{exam}提取单词")
+    query_answer.debug(f"从{exam}提取单词")
     word = re.findall("{(.*?)}", exam)
-    query_answer.logger.debug(f"提取到{word}")
+    query_answer.debug(f"提取到{word}")
     word = word[0] if word else exam
     # 判断单词是否在单词列表中
     if word not in public_info.word_list:
@@ -249,13 +263,13 @@ def word_form_mean(public_info: PublicInfo) -> int | None:
         elif word.endswith("ing") and word[:-3] in public_info.word_list:
             word = word[:-3]
         else:
-            query_answer.logger.debug(f"将{word}转原型")
+            query_answer.debug(f"将{word}转原型")
             # 单词转原型
             word = word_revert(word)
     try:
         query_word(public_info, word)
     except CardDataError:
-        query_answer.logger.error(
+        query_answer.error(
                 f"无法加载单词卡片，尝试跳过当前题目："
                 f"word={word!r}, "
                 f"course_id={public_info.course_id}, "
@@ -264,7 +278,7 @@ def word_form_mean(public_info: PublicInfo) -> int | None:
         return None
     # 提取释义
     handle_query_word_mean(public_info)
-    query_answer.logger.debug('选择意思')
+    query_answer.debug('选择意思')
     # 选择正确释义
     return select_mean(public_info)
 
@@ -283,19 +297,37 @@ def mean_to_word(public_info):
 
 # select together word
 def together_word(public_info) -> dict:
-    query_answer.logger.debug("意思相似单词")
+    query_answer.debug("意思相似单词")
     # exam options
-    options = filler_option(public_info)
+    options = source_options(public_info)
     # answer
     result_word = {word['relation']: options.index(word['relation']) for word in public_info.exam['stem']['remark']}
-    query_answer.logger.debug(f"选项{options}")
-    query_answer.logger.debug(f"答案{result_word}")
+    query_answer.debug(f"选项{options}")
+    query_answer.debug(f"答案{result_word}")
     return result_word
+
+
+def _sentence_option_tag(option, sub_option = None):
+    tag = option['answer_tag']
+    if isinstance(tag, str):
+        return tag + str(sub_option['answer_tag'] if sub_option is not None else 0)
+    return tag
+
+
+def _match_sentence_option(options, matches):
+    for option in options:
+        if isinstance(option['answer_tag'], str):
+            for sub_option in option.get('sub_options') or []:
+                if matches(sub_option['content']):
+                    return _sentence_option_tag(option, sub_option)
+        if matches(option['content']):
+            return _sentence_option_tag(option)
+    return None
 
 
 # complete a sentence
 def full_sentence(public_info) -> int | str | None:
-    query_answer.logger.debug("选择最合适的单词完成句子")
+    query_answer.debug("选择最合适的单词完成句子")
     options = filler_option(public_info)
     # 单词库命中优先(mode 42: answer_corrects 下标对应的正确答案单词)
     remark = public_info.exam.get('stem', {}).get('remark') if isinstance(public_info.exam, dict) else None
@@ -309,43 +341,36 @@ def full_sentence(public_info) -> int | str | None:
         lower_words = [w.lower( ) for w in word_answers if w.lower( ) not in fixed]
         if not lower_words:
             lower_words = [w.lower( ) for w in word_answers]
-        for option in public_info.exam['options']:
-            if isinstance(option, dict) and option.get('content', '').lower( ) in lower_words:
-                query_answer.logger.debug(f"单词库命中,提交{option.get('content')}(tag={option.get('answer_tag')})")
-                return option.get('answer_tag')
+        tag = _match_sentence_option(public_info.exam['options'], lambda candidate: candidate.lower( ) in lower_words)
+        if tag is not None:
+            query_answer.debug('单词库命中，提交 %s', tag)
+            return tag
     # word in examples sentence
     word = word_examples(public_info, options)
-    # extract answer tag
-    for option in public_info.exam['options']:
-        # match answer
-        option_word = option['answer_tag']
-        if type(option_word) == str:
-            if option['sub_options']:
-                for sub_option in option['sub_options']:
-                    if sub_option['content'] == word:
-                        return option_word + str(sub_option['answer_tag'])
-            # no need to  match  tenses
-            if option['content'] == word:
-                return option_word + '0'
-        else:
-            if option['content'] == word:
-                return option_word
-    query_answer.logger.error("补全句子失败,猜第3个选项")
-    # submit 1#0,0#2 or 1 应该分开写提升正确率
-    return public_info.exam['options'][2]['answer_tag']
+    tag = _match_sentence_option(public_info.exam['options'], lambda candidate: candidate == word)
+    if tag is not None:
+        return tag
+    options = public_info.exam['options']
+    if not options:
+        raise ValueError('题目没有可选答案')
+    index = min(2, len(options) - 1)
+    query_answer.warning('补全句子未匹配，选择第 %s 个选项', index + 1)
+    return _sentence_option_tag(options[index])
 
 
 # full word
 def complete_sentence(public_info):
-    query_answer.logger.debug("补全单词")
+    query_answer.debug("补全单词")
     word_len = public_info.exam['w_lens'][0]
     # submit not  case sensitive
     word_start_with = public_info.exam['w_tip'].lower( )
     # iterate over all word in the unit
-    word = None
+    candidate = None
     for word in public_info.word_list:
-        if word.startswith(word_start_with):
-            query_answer.logger.debug(word)
+        if word.lower( ).startswith(word_start_with):
+            if candidate is None:
+                candidate = word
+            query_answer.debug(word)
             if len(word) == word_len:
                 return word
             elif len(word) + 1 == word_len:
@@ -354,10 +379,10 @@ def complete_sentence(public_info):
                 result = word_examples(public_info, [word])
                 if result:
                     return result
-    if word is not None:
-        query_answer.logger.error(f"找不到答案,提交{word}")
-        return word
-    raise ValueError("词表为空，无法补全单词")
+    if candidate is not None:
+        query_answer.error(f"找不到匹配长度的答案，提交前缀匹配项 {candidate}")
+        return candidate
+    raise ValueError("词表中没有匹配前缀的单词")
 
 
 # mode 73: 多空首字母补全单词(提交JSON数组)
@@ -415,7 +440,7 @@ def _global_word_pool(public_info):
 
 
 def complete_spelling(public_info):
-    query_answer.logger.debug("补全拼写")
+    query_answer.debug("补全拼写")
     content = public_info.exam['stem']['content']
     remark = public_info.exam['stem']['remark']
     tips = re.findall(r'\{(\w+)}', content)
@@ -433,9 +458,9 @@ def complete_spelling(public_info):
             picked = [w for w in candidates if w.lower( ) in opt_lower]
             if picked:
                 answers = picked[:slot_count] if slot_count else picked
-                query_answer.logger.debug(f"无前缀空位命中,补全拼写结果:{answers}")
+                query_answer.debug(f"无前缀空位命中,补全拼写结果:{answers}")
                 return json.dumps(answers)
-        query_answer.logger.error("补全拼写失败:无前缀空位无匹配")
+        query_answer.error("补全拼写失败:无前缀空位无匹配")
         return None
     # 1. 本地答案库短语命中(标准答案,按前缀匹配单词)
     lib_answers = lookup(remark)
@@ -444,14 +469,14 @@ def complete_spelling(public_info):
         words = [w for w in re.split(r'[\s\-(),/]+', lib_answers[0]) if w]
         answers = _match_tips_words(tips, word_lens, words, exclude = fixed)
         if answers:
-            query_answer.logger.debug(f"答案库命中,补全拼写结果:{answers}")
+            query_answer.debug(f"答案库命中,补全拼写结果:{answers}")
             return json.dumps(answers)
     # 2. 单词库命中(同义变体,如 {sup}->supervision; 由 mode 42 提交后捕获)
     word_answers = lookup_word(remark)
     if word_answers:
         answers = _match_tips_words(tips, word_lens, word_answers, strict_len = False, exclude = fixed)
         if answers:
-            query_answer.logger.debug(f"单词库变体命中,补全拼写结果:{answers}")
+            query_answer.debug(f"单词库变体命中,补全拼写结果:{answers}")
             return json.dumps(answers)
     # 3. 词表短语兜底
     phrase = _match_phrase_by_word_zh(public_info, remark)
@@ -459,32 +484,32 @@ def complete_spelling(public_info):
         words = unquote(phrase).split( )
         answers = _match_tips_words(tips, word_lens, words, exclude = fixed)
         if answers:
-            query_answer.logger.debug(f"补全拼写结果:{answers}")
+            query_answer.debug(f"补全拼写结果:{answers}")
             return json.dumps(answers)
     # 4. 合并候选池兜底(跨来源组合, 如 {ze}-{wa} -> zero+waste): 先严格长度, 失败再宽松
     candidates = _candidate_words(public_info, remark)
     if candidates:
         answers = _match_tips_words(tips, word_lens, candidates, exclude = fixed)
         if answers:
-            query_answer.logger.debug(f"合并候选池命中,补全拼写结果:{answers}")
+            query_answer.debug(f"合并候选池命中,补全拼写结果:{answers}")
             return json.dumps(answers)
         answers = _match_tips_words(tips, word_lens, candidates, strict_len = False, exclude = fixed)
         if answers:
-            query_answer.logger.debug(f"合并候选池宽松命中,补全拼写结果:{answers}")
+            query_answer.debug(f"合并候选池宽松命中,补全拼写结果:{answers}")
             return json.dumps(answers)
     # 5. 全局词表单词池兜底(前缀单词在其他词条词表中, 如 {uti}->utilization、{con}->conservation、{tra}->transform)
     gpool = _global_word_pool(public_info)
     if gpool:
         answers = _match_tips_words(tips, word_lens, gpool, exclude = fixed)
         if answers:
-            query_answer.logger.debug(f"全局词表命中,补全拼写结果:{answers}")
+            query_answer.debug(f"全局词表命中,补全拼写结果:{answers}")
             return json.dumps(answers)
         # 宽松兜底(如 {res}->resources 9 位 vs w_lens 8): 提交判错 -> answer_corrects 入库 -> 下次自愈(判错优于永远跳过)
         answers = _match_tips_words(tips, word_lens, gpool, strict_len = False, exclude = fixed)
         if answers:
-            query_answer.logger.debug(f"全局词表宽松命中,补全拼写结果:{answers}")
+            query_answer.debug(f"全局词表宽松命中,补全拼写结果:{answers}")
             return json.dumps(answers)
-    query_answer.logger.error(f"补全拼写失败:未匹配到前缀")
+    query_answer.error(f"补全拼写失败:未匹配到前缀")
     return None
 
 
@@ -498,34 +523,33 @@ def answer(public_info, mode):
     :param mode: 题型编号
     :return:
     """
-    if mode == 11:
+    if mode in (11, 15, 16, 21, 22):
         option = word_form_mean(public_info)
     elif mode == 13:
-        # guess option 没思路
-        option = 3
-    elif mode == 15 or mode == 16 or mode == 21 or mode == 22:
-        option = word_form_mean(public_info)
-        # 英译汉
-    elif mode == 17 or mode == 18:
+        options = public_info.exam['options']
+        if not options:
+            raise ValueError('题目没有可选答案')
+        option = min(3, len(options) - 1)
+    elif mode in (17, 18):
         option = mean_to_word(public_info)
     elif mode == 31:
         option = together_word(public_info)
     elif mode == 32:
         option = select_word(public_info)
-        query_answer.logger.debug(f'翻译结果{option}')
-    elif mode == 41 or mode == 42 or mode == 43 or mode == 44:
+        query_answer.debug(f'翻译结果{option}')
+    elif mode in (41, 42, 43, 44):
         option = full_sentence(public_info)
-        query_answer.logger.debug(f'提交选项{option}')
+        query_answer.debug(f'提交选项{option}')
     # mode == 43  "content":"Reading  is  of  {}  importance  in  language  learning.","remark":"阅读在语言学习中至关重要。" 选时态
-    elif mode == 51 or mode == 52 or mode == 53 or mode == 54:
+    elif mode in (51, 52, 53, 54):
         option = complete_sentence(public_info)
-        query_answer.logger.debug(f'补全单词结果{option}')
+        query_answer.debug(f'补全单词结果{option}')
     elif mode == 73:
         option = complete_spelling(public_info)
-        query_answer.logger.debug(f'补全拼写结果{option}')
+        query_answer.debug(f'补全拼写结果{option}')
     else:
-        query_answer.logger.error(public_info.exam)
-        query_answer.logger.error(f"其他题型{mode},程序退出")
+        query_answer.error(public_info.exam)
+        query_answer.error(f"不支持的题型：{mode}")
         # 此处抛出异常
         raise ValueError(f"不支持的题型：{mode}")
     return option

@@ -13,8 +13,11 @@ class RequestWorker(QtCore.QThread):
         self.operation = operation
     
     def run(self):
+        if self.isInterruptionRequested( ):
+            return
         try:
             result = self.operation( )
         except Exception as exc:
             result = exc
-        self.result_ready.emit(result)
+        if not self.isInterruptionRequested( ):
+            self.result_ready.emit(result)

@@ -44,6 +44,7 @@ coverage.xml
 # Python builds and packaging
 /build/*
 !/build/build.py
+!/build/__init__.py
 !/build/windows.iss
 !/build/requirements.txt
 !/build/README.md

@@ -4,10 +4,10 @@ from PyQt6 import QtCore, QtWidgets
 from PyQt6.QtCore import QThread, pyqtSignal
 from PyQt6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton
 
-from easy_cidaren.app_logging.config import Log
+from easy_cidaren.app_logging.config import get_logger
 from easy_cidaren.token_capture.service import CaptureStatus, TokenCaptureService
 
-dialog_logger = Log("builtin_token").logger
+dialog_logger = get_logger("builtin_token")
 
 
 class TokenCaptureWorker(QThread):

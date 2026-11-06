@@ -8,7 +8,6 @@ import shutil
 import subprocess
 import sys
 import sysconfig
-import tempfile
 from pathlib import Path
 from typing import NoReturn
 
@@ -38,17 +37,8 @@ def machine_architecture( ):
 
 def publish(source, destination):
     DIST.mkdir(parents = True, exist_ok = True)
-    PACKAGES.mkdir(parents = True, exist_ok = True)
-    temporary = None
-    try:
-        with source.open('rb') as input_file, tempfile.NamedTemporaryFile(dir = PACKAGES, delete = False) as output:
-            temporary = Path(output.name)
-            shutil.copyfileobj(input_file, output)
-        shutil.copymode(source, temporary)
-        temporary.replace(destination)
-    finally:
-        if temporary is not None:
-            temporary.unlink(missing_ok = True)
+    # The completed package is already under build/temp; publish it atomically.
+    source.replace(destination)
     return destination
 
 
@@ -57,7 +47,7 @@ def run(command):
     subprocess.run([str(part) for part in command], cwd = ROOT, check = True)
 
 
-def require(command):
+def require(command: str) -> str:
     found = shutil.which(command)
     if not found:
         raise RuntimeError(f'缺少构建工具：{command}，请参阅 build/README.md')
@@ -96,7 +86,7 @@ def windows( ):
     bundle( )
     PACKAGES.mkdir(parents = True, exist_ok = True)
     run([compiler, f'/DAppVersion={VERSION}', f'/DAppSource={BUNDLE / NAME}',
-         f'/DOutputDir={PACKAGES}', f'/DAppArch={architecture}',
+         f'/DOutputDir={PACKAGES}',
          f'/DInnoArch={inno_architecture}', f'/DOutputName={destination.stem}',
          ROOT / 'build' / 'windows.iss'])
     return publish(PACKAGES / destination.name, destination)
@@ -146,7 +136,10 @@ def linux( ):
             encoding = 'utf-8')
     PACKAGES.mkdir(parents = True, exist_ok = True)
     for kind in ('deb', 'rpm'):
+        package_arch = {'deb': {'x64': 'amd64', 'arm64': 'arm64'},
+                        'rpm': {'x64': 'x86_64', 'arm64': 'aarch64'}}[kind][architecture]
         run([fpm, '-f', '-s', 'dir', '-t', kind, '-n', 'easy-cidaren', '-v', VERSION,
+             '-a', package_arch,
              '--license', 'GPL-3.0-only', '--maintainer', 'Easy Cidaren',
              '--url', 'https://github.com/fstyou/Easy_Cidaren',
              '--description', 'Easy Cidaren desktop application',
@@ -193,16 +186,16 @@ def main( ):
     parser.add_argument('target', nargs = '?', metavar = '目标', help = '目标平台：windows、macos 或 linux')
     parser.add_argument('-h', '--help', action = 'help', help = '显示帮助信息并退出')
     target = parser.parse_args( ).target
-    targets = {'windows': 'win32', 'macos': 'darwin', 'linux': 'linux'}
+    targets = {'windows': ('win32', windows), 'macos': ('darwin', macos), 'linux': ('linux', linux)}
     if target is None:
         parser.error('请指定打包目标：windows、macos 或 linux')
     if target not in targets:
         parser.error(f'不支持的打包目标：{target}；请选择 windows、macos 或 linux')
-    expected = targets[target]
+    expected, builder = targets[target]
     if not sys.platform.startswith(expected):
         parser.error(f'{target} 必须在对应的操作系统上构建')
     try:
-        result = {'windows': windows, 'macos': macos, 'linux': linux}[target]( )
+        result = builder( )
     except subprocess.CalledProcessError as exc:
         parser.exit(1, f'打包失败：外部命令退出，状态码为 {exc.returncode}。\n')
     except (RuntimeError, OSError) as exc:

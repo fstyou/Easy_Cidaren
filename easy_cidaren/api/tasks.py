@@ -1,36 +1,80 @@
 import json
 import random
 import time
-from functools import wraps
 
-import easy_cidaren.api.sessions as requests
-from easy_cidaren.api.response import handle_task_response as handle_response
-from easy_cidaren.app_logging.config import Log
-from easy_cidaren.core.public_info import PublicInfo
+from requests.exceptions import RequestException
+
+from easy_cidaren.api import sessions
+from easy_cidaren.api.response import (
+    UnknownObfuscationError, UnsafeRequestError, WordSelectionRequiredError, handle_task_response as handle_response,
+)
+from easy_cidaren.app_logging.config import get_logger
 from easy_cidaren.security.decode import debase64, JV_TWO, JV_THREE
 from easy_cidaren.security.signing import encrypt_md5
 from easy_cidaren.utils.helpers import create_timestamp
 
 # create logger
-api = Log('main_api')
+api = get_logger('main_api')
 
 basic_url = 'https://app.vocabgo.com/student/api/Student/'
 
-def request_with_known_jv(request_func, url, **kwargs):
-    """Retry responses with an unknown obfuscation version."""
+def request_with_known_jv(request_func, url, *, retry_unknown = False, **kwargs):
+    """Retry unreadable encoding versions only for explicitly read-only requests."""
     kwargs.setdefault('timeout', 30)
-    for _ in range(5):
-        response = request_func(url, **kwargs)
+    attempts = 5 if retry_unknown else 1
+    for attempt in range(attempts):
         try:
-            jv = str(response.json( ).get('jv', ''))
+            response = request_func(url, **kwargs)
+            response.raise_for_status( )
+        except RequestException as exc:
+            if retry_unknown:
+                raise
+            raise UnsafeRequestError('请求结果不确定，任务已停止；请先在客户端检查任务状态') from exc
+        try:
+            payload = response.json( )
+            jv = str(payload.get('jv') or '')
             if not jv or jv == '0' or jv in JV_TWO or jv in JV_THREE:
                 return response
-        except (ValueError, AttributeError):
+        except (ValueError, AttributeError) as exc:
+            if retry_unknown:
+                return response
+            raise UnsafeRequestError('服务端响应无效，任务已停止；请先在客户端检查任务状态') from exc
+        # 普通 Base64 内容无需混淆规则；以解码结果为准，不只检查版本标签。
+        try:
+            debase64(payload.get('data'), jv)
+        except (KeyError, ValueError):
+            pass
+        else:
             return response
-        if _ < 4:
+        if attempt + 1 < attempts:
             time.sleep(random.uniform(2, 3))
-    api.logger.error("连续 5 次请求的 jv 均不在已知范围内")
-    raise ValueError("jv 解码失败")
+    api.error("服务端返回未知的 jv 编码版本")
+    raise UnknownObfuscationError("服务端返回未知的数据编码版本，请更新程序后重试")
+
+
+def _handle_changed_response(response):
+    try:
+        handle_response(response)
+    except (KeyError, TypeError, ValueError, AttributeError) as exc:
+        raise UnsafeRequestError('服务端已响应，但返回状态无效；请先检查任务状态') from exc
+
+
+def _update_exam(public_info, response):
+    """Interpret the service response once for start, next and skip operations."""
+    _handle_changed_response(response)
+    try:
+        payload = response.json( )
+        if payload.get('msg') == '任务已完成！':
+            public_info.exam = 'complete'
+        elif payload.get('msg') == '需要选词！':
+            raise WordSelectionRequiredError('服务端要求先选词，请在客户端完成选词后重试')
+        else:
+            exam = debase64(payload['data'], payload['jv'])
+            if not isinstance(exam, dict) or not exam.get('topic_code'):
+                raise ValueError('题目缺少有效的题目编号')
+            public_info.exam = exam
+    except (KeyError, TypeError, ValueError, AttributeError) as exc:
+        raise UnsafeRequestError('服务端已响应，但题目数据无法解析；请先检查任务状态') from exc
 
 
 def skip_exam(public_info):
@@ -38,37 +82,33 @@ def skip_exam(public_info):
     跳过过不了的题目
     :return:
     """
-    api.logger.info("无法完成，跳过题目")
-    url = f'{PublicInfo.task_type}/SkipAnswer'
+    api.info("无法完成，跳过题目")
+    url = 'ClassTask/SkipAnswer'
+    params = _answer_parameters(public_info.topic_code, 20000)
+    rsp = request_with_known_jv(sessions.answer_session.post, basic_url + url, data = json.dumps(params))
+    _update_exam(public_info, rsp)
+
+
+def _answer_parameters(topic_code, time_spent):
     params = {'it_font_size': 42,
               'it_img_w': 804,
               'opt_font_c': '#000000',
               'opt_font_size': 37,
               'opt_img_w': 684,
-              'time_spent': 20000,
+              'time_spent': time_spent,
               'timestamp': create_timestamp( ),
-              'topic_code': public_info.topic_code,
+              'topic_code': topic_code,
               'version': '2.6.2.24031302'}
     sign = encrypt_md5(
             "&".join([f'{key}={value}' for key, value in params.items( )]) + 'ajfajfamsnfaflfasakljdlalkflak')
     params.update({'sign': sign})
-    rsp = request_with_known_jv(requests.rqs2_session.post, basic_url + url, data = json.dumps(params))
-    # check response is success
-    handle_response(rsp)
-    # 检查jv
-    # update exam
-    if rsp.json( )['msg'] == '任务已完成！' or rsp.json( )['msg'] == '需要选词！':
-        public_info.exam = 'complete'
-    # decrypt response
-    else:
-        public_info.exam = debase64(rsp.json( )['data'], rsp.json( )['jv'])
+    return params
 
 
-# 勾选所有单词 bug
-def select_all_word(word_info, task_id: int, ) -> None:
-    api.logger.debug("勾选全部单词并提交")
+def select_all_word(word_info, task_id) -> None:
+    api.debug("勾选全部单词并提交")
     timestamp = create_timestamp( )
-    url = f'{PublicInfo.task_type}/SubmitChoseWord'
+    url = 'ClassTask/SubmitChoseWord'
     # 取消键值对的空格(紧密排版)
     word_map = json.dumps(word_info, separators = (',', ':'))
     source_str = f'chose_err_item=2&task_id={task_id}&timestamp={timestamp}&version=2.6.1.231204&word_map={word_map}ajfajfamsnfaflfasakljdlalkflak'
@@ -76,20 +116,16 @@ def select_all_word(word_info, task_id: int, ) -> None:
     data = {"task_id": task_id, "word_map": word_info, "chose_err_item": 2,
             "timestamp": timestamp, "version": "2.6.1.231204", "sign": sign,
             "app_type": 1}
-    rsp = request_with_known_jv(requests.rqs3_session.post, basic_url + url, data = json.dumps(data))
+    rsp = request_with_known_jv(sessions.selection_session.post, basic_url + url, data = json.dumps(data))
     # 检查请求是否成功
-    handle_response(rsp)
+    _handle_changed_response(rsp)
 
 
 # class task
 # 获取所有班级任务
-def get_class_task(public_info, page_count: int):
-    """
-    :param public_info:
-    :param page_count:  第几页的数据
-    :return:
-    """
-    api.logger.info(f'获取第{page_count}页任务')
+def get_class_task(page_count: int):
+    """Return one page of class tasks without mutating UI state."""
+    api.info(f'获取第{page_count}页任务')
     url = 'ClassTask/PageTask'
     timestamp = create_timestamp( )
     sign = f"page_count={page_count}&page_size=10&search_type=0&timestamp={timestamp}&version=2.6.1.240122ajfajfamsnfaflfasakljdlalkflak"
@@ -103,87 +139,46 @@ def get_class_task(public_info, page_count: int):
         "app_type": 1
     }
     # "task_type": 2 是班级测试任务 1 是班级自学任务
-    task = requests.class_task_request.post(url = basic_url + url, json = data, timeout = 30)
+    task = sessions.query_session.post(url = basic_url + url, json = data, timeout = 30)
     # check response is success
     handle_response(task)
     # 转换成字典
-    task_dict = task.json( )
-    public_info.class_task.append(task_dict['data'])
-    # number of task
-    public_info.task_total_count = task_dict['data']['total']
+    return task.json( )['data']
 
 
 # start
 
 def get_exam(public_info):
-    api.logger.debug("获取第一题")
-    url = f'{PublicInfo.task_type}/StartAnswer'
-    params = {'task_id': public_info.task_id or -1, 'task_type': PublicInfo.task_type_int,
+    api.debug("获取第一题")
+    url = 'ClassTask/StartAnswer'
+    params = {'task_id': public_info.task_id or -1, 'task_type': 2, 'release_id': public_info.release_id,
               'opt_img_w': '684',
               'opt_font_size': '37', 'opt_font_c': '%23000000', 'it_img_w': '804', 'it_font_size': '42',
               'timestamp': create_timestamp( ), 'version': '2.6.1.240122', 'app_type': '1'}
-    if PublicInfo.task_type_int == 2:
-        params.update({'release_id': public_info.release_id})
-    else:
-        params.update({'course_id': public_info.course_id})
-    rsp = request_with_known_jv(requests.class_task_request.get, basic_url + url, params = params)
-    # 检查请求结果
-    handle_response(rsp)
-    if rsp.json( ).get('msg') == '任务已完成！' or rsp.json( ).get('msg') == '需要选词！':
-        public_info.exam = 'complete'
-        return
-    #  decrypt response
-    public_info.exam = debase64(rsp.json( )['data'], rsp.json( )['jv'])
-    api.logger.debug("写入成功")
+    rsp = request_with_known_jv(sessions.query_session.get, basic_url + url, params = params)
+    _update_exam(public_info, rsp)
+    api.debug("写入成功")
 
 
 # next exam
 def next_exam(public_info):
     # 获取每一题提交的用时，500为一秒
-    min_time = public_info.spend_min_time * 500
-    max_time = public_info.spend_max_time * 500
-    api.logger.debug("获取下一题")
-    url = f'{PublicInfo.task_type}/SubmitAnswerAndSave'
-    params = {'it_font_size': 42,
-              'it_img_w': 804,
-              'opt_font_c': '#000000',
-              'opt_font_size': 37,
-              'opt_img_w': 684,
-              'time_spent': random.randint(min_time, max_time),
-              'timestamp': create_timestamp( ),
-              'topic_code': public_info.topic_code,
-              'version': '2.6.2.24031302'}
-    sign = encrypt_md5(
-            "&".join([f'{key}={value}' for key, value in params.items( )]) + 'ajfajfamsnfaflfasakljdlalkflak')  # 加密
-    params.update({'sign': sign})
-    data = request_with_known_jv(requests.rqs2_session.post, basic_url + url, data = json.dumps(params))
-    # 检查请求是否成功
-    handle_response(data)
-    if data.json( )['msg'] == '任务已完成！' or data.json( )['msg'] == '需要选词！':
-        public_info.exam = 'complete'
-    # decrypt response
-    else:
-        public_info.exam = debase64(data.json( )['data'], data.json( )['jv'])
-
-
-def check_is_self_built(func):
-    @wraps(func)
-    def is_self_built(public_info, word):
-        if public_info.is_self_built:
-            # 从单词列表获取索引
-            word_index = public_info.word_list.index(word)
-            # 获取单元单词
-            public_info.now_unit = public_info.get_book_words_data[word_index]["list_id"]
-        return func(public_info, word)
-    
-    return is_self_built
+    min_time = public_info.settings.spend_min_time * 500
+    max_time = public_info.settings.spend_max_time * 500
+    api.debug("获取下一题")
+    url = 'ClassTask/SubmitAnswerAndSave'
+    params = _answer_parameters(public_info.topic_code, random.randint(min_time, max_time))
+    data = request_with_known_jv(sessions.answer_session.post, basic_url + url, data = json.dumps(params))
+    _update_exam(public_info, data)
 
 
 # 查询单词
-@check_is_self_built
 def query_word(public_info, word):
+    if public_info.is_self_built:
+        word_index = public_info.word_list.index(word)
+        public_info.now_unit = public_info.get_book_words_data[word_index]['list_id']
     time.sleep(random.randint(0, 2))
-    api.logger.debug(f"查询单词{word}")
+    api.debug(f"查询单词{word}")
     url = basic_url + 'Course/StudyWordInfo'
     params = {
         'course_id': public_info.course_id,
@@ -193,7 +188,7 @@ def query_word(public_info, word):
         'version': '2.6.1.231204',
         'app_type': 1
     }
-    api.logger.debug(
+    api.debug(
             f'卡片查询参数: '
             f'course_id={public_info.course_id}, '
             f'list_id={public_info.now_unit}, '
@@ -202,8 +197,9 @@ def query_word(public_info, word):
             f'is_self_built={public_info.is_self_built}'
     )
     response = request_with_known_jv(
-            requests.rqs_session.get,
+            sessions.query_session.get,
             url,
+            retry_unknown = True,
             params = params
     )
     handle_response(response)
@@ -211,25 +207,31 @@ def query_word(public_info, word):
             response.json( )['data'],
             response.json( )['jv']
     )
-    api.logger.debug("查询单词成功")
+    api.debug("查询单词成功")
 
 
 # submit word
 def submit_result(public_info, option):
-    api.logger.debug("开始提交答案")
+    api.debug("开始提交答案")
     timestamp = create_timestamp( )
     topic_code = public_info.topic_code
     sign = encrypt_md5(
             f"answer={option}&timestamp={timestamp}&topic_code={topic_code}&version=2.6.1.231204ajfajfamsnfaflfasakljdlalkflak")
-    url = f"{PublicInfo.task_type}/VerifyAnswer"
+    url = 'ClassTask/VerifyAnswer'
     data = {"answer": option,
             "topic_code": topic_code,
             "timestamp": timestamp, "version": "2.6.1.231204", "sign": sign,
             "app_type": 1}
-    rsp = request_with_known_jv(requests.rqs2_session.post, basic_url + url, data = json.dumps(data))
+    rsp = request_with_known_jv(sessions.answer_session.post, basic_url + url, data = json.dumps(data))
     # check request is success
-    handle_response(rsp)
-    result = debase64(rsp.json( )['data'], rsp.json( )['jv'])
+    _handle_changed_response(rsp)
+    try:
+        payload = rsp.json( )
+        result = debase64(payload['data'], payload['jv'])
+        if not isinstance(result, dict):
+            raise ValueError('答题结果必须是对象')
+    except (KeyError, TypeError, ValueError, AttributeError) as exc:
+        raise UnsafeRequestError('服务端已响应，但答题结果无法解析；请先检查任务状态') from exc
     answer_result = result.get('answer_result')
-    api.logger.debug(f"答题判分: answer_result={answer_result} answer_corrects={result.get('answer_corrects')}")
+    api.debug(f"答题判分: answer_result={answer_result} answer_corrects={result.get('answer_corrects')}")
     return result

@@ -2,11 +2,11 @@ import random
 import re
 
 from easy_cidaren.api.tasks import query_word
-from easy_cidaren.app_logging.config import Log
+from easy_cidaren.app_logging.config import get_logger
 from easy_cidaren.utils.word_revert import word_revert
 
 # log module
-select_module = Log("select_mean")
+select_module = get_logger("select_mean")
 
 
 #
@@ -18,11 +18,19 @@ def handle_query_word_mean(public_info) -> None:
     else:
         for mean in public_info.word_query_result['means']:
             means.append(' '.join(mean['mean']))
-    select_module.logger.debug(f"提取到正确选项：{means}")
+    select_module.debug(f"提取到正确选项：{means}")
     public_info.word_means = means
 
 
 # extract options
+def source_options(public_info) -> list:
+    return [option['content'] for option in public_info.exam['options']]
+
+
+def _without_whitespace(text):
+    return ''.join(text.split( ))
+
+
 def filler_option(public_info) -> list:
     """
     提取题目中返回的选项以及排序优化
@@ -30,18 +38,8 @@ def filler_option(public_info) -> list:
     :return:
     """
     # 试题选项
-    options = []
-    source = []
-    # 填充选项
-    for option_info in public_info.exam["options"]:
-        option = option_info['content']
-        source.append(option)
-        if option in public_info.word_list:
-            options.insert(0, option)
-        else:
-            options.append(option)
-    public_info.source_option = source
-    select_module.logger.debug(f"提取到题目选项{options}")
+    options = sorted(source_options(public_info), key = lambda option: option not in public_info.word_list)
+    select_module.debug(f"提取到题目选项{options}")
     return options
 
 
@@ -53,14 +51,17 @@ def select_mean(public_info) -> int:
     """
     options = filler_option(public_info)
     # 匹配选项
-    for index, option in enumerate(options):
-        for mean in public_info.word_means:
-            # 选项顺序混乱，重排序
-            if sorted(option.replace(" ", '')) == sorted(mean.replace(" ", '')) or mean in option:
-                select_module.logger.debug(f"匹配第{index + 1}个选项选项[{option}]")
+    original = source_options(public_info)
+    means = [_without_whitespace(mean) for mean in public_info.word_means if mean.strip( )]
+    for exact in (True, False):
+        for option in options:
+            normalized = _without_whitespace(option)
+            if any(normalized == mean if exact else mean in normalized for mean in means):
+                index = original.index(option)
+                select_module.debug(f"匹配第{index + 1}个选项[{option}]")
                 return index
     # 匹配失败 随机提交一个
-    select_module.logger.warning("匹配失败，随机提交")
+    select_module.warning("匹配失败，随机提交")
     return random.randint(0, len(options) - 1)
 
 
@@ -73,10 +74,13 @@ def select_match_word(public_info, word_mean) -> int:
         handle_query_word_mean(public_info)
         # is match word mean
         for mean in public_info.word_means:
-            if sorted(word_mean.replace(" ", '')) == sorted(mean.replace(" ", '')):
-                return public_info.source_option.index(word)
-    select_module.logger.error("匹配失败,猜第3个选项")
-    return 2
+            if _without_whitespace(word_mean) == _without_whitespace(mean):
+                return source_options(public_info).index(word)
+    if not options:
+        raise ValueError('题目没有可选答案')
+    index = min(2, len(options) - 1)
+    select_module.error("匹配失败，选择第 %s 个选项", index + 1)
+    return index
 
 
 def is_word_exist(public_info, option) -> bool:
@@ -91,7 +95,7 @@ def is_word_exist(public_info, option) -> bool:
         query_word(public_info, option)
         return True
     else:
-        select_module.logger.debug('转原型')
+        select_module.debug('转原型')
         revert_option = word_revert(option)
         if revert_option in public_info.word_list:
             query_word(public_info, revert_option)

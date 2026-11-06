@@ -1,14 +1,16 @@
+import hashlib
 import platform
 import re
+import ssl
 import subprocess
 from pathlib import Path
 
-from easy_cidaren.app_logging.config import Log
+from easy_cidaren.app_logging.config import get_logger
 
 if platform.system( ) == "Windows":
     import winreg
 
-proxy_logger = Log("proxy_manager")
+proxy_logger = get_logger("proxy_manager")
 
 
 class ProxyManager:
@@ -40,53 +42,46 @@ class ProxyManager:
                     text = True
             )
             
-            web_enabled = "Enabled: Yes" in web_output
-            secure_enabled = "Enabled: Yes" in secure_output
-            
-            web_host = re.search(r'Server: (.+)', web_output)
-            web_port = re.search(r'Port: (\d+)', web_output)
-            secure_host = re.search(r'Server: (.+)', secure_output)
-            secure_port = re.search(r'Port: (\d+)', secure_output)
-            
-            return {
-                'web_enabled': web_enabled,
-                'web_host': web_host.group(1).strip( ) if web_host else '',
-                'web_port': web_port.group(1) if web_port else '',
-                'secure_enabled': secure_enabled,
-                'secure_host': secure_host.group(1).strip( ) if secure_host else '',
-                'secure_port': secure_port.group(1) if secure_port else '',
-            }
-        except (OSError, subprocess.SubprocessError) as exc:
-            proxy_logger.logger.error("读取 macOS 代理设置失败：%s", exc)
+            settings = {}
+            for kind, output in (('web', web_output), ('secure', secure_output)):
+                enabled = re.search(r'^Enabled:[ \t]*(Yes|No)[ \t]*$', output, re.MULTILINE)
+                host = re.search(r'^Server:[ \t]*(.*?)[ \t]*$', output, re.MULTILINE)
+                port = re.search(r'^Port:[ \t]*(\d+)[ \t]*$', output, re.MULTILINE)
+                if not enabled:
+                    raise ValueError(f'{kind} 代理状态无法读取')
+                is_enabled = enabled.group(1) == 'Yes'
+                if is_enabled and (not host or not host.group(1) or not port or int(port.group(1)) == 0):
+                    raise ValueError(f'{kind} 代理缺少地址或端口')
+                settings.update({f'{kind}_enabled': is_enabled,
+                                 f'{kind}_host': host.group(1) if host else '',
+                                 f'{kind}_port': port.group(1) if port else ''})
+            return settings
+        except (OSError, subprocess.SubprocessError, ValueError) as exc:
+            proxy_logger.error("读取 macOS 代理设置失败：%s", exc)
             return None
     
     @staticmethod
     def _get_windows_proxy_settings( ):
         """获取 Windows 当前的代理设置"""
         try:
-            key = winreg.OpenKey(
+            with winreg.OpenKey(
                     winreg.HKEY_CURRENT_USER,
                     r"Software\Microsoft\Windows\CurrentVersion\Internet Settings",
                     0,
                     winreg.KEY_READ
-            )
-            
-            try:
-                proxy_enable, _ = winreg.QueryValueEx(key, "ProxyEnable")
-            except FileNotFoundError:
-                proxy_enable = 0
-            
-            try:
-                proxy_server, _ = winreg.QueryValueEx(key, "ProxyServer")
-            except FileNotFoundError:
-                proxy_server = ""
-            
-            try:
-                proxy_override, _ = winreg.QueryValueEx(key, "ProxyOverride")
-            except FileNotFoundError:
-                proxy_override = ""
-            
-            winreg.CloseKey(key)
+            ) as key:
+                try:
+                    proxy_enable, _ = winreg.QueryValueEx(key, "ProxyEnable")
+                except FileNotFoundError:
+                    proxy_enable = 0
+                try:
+                    proxy_server, _ = winreg.QueryValueEx(key, "ProxyServer")
+                except FileNotFoundError:
+                    proxy_server = ""
+                try:
+                    proxy_override, _ = winreg.QueryValueEx(key, "ProxyOverride")
+                except FileNotFoundError:
+                    proxy_override = ""
             
             return {
                 'enabled': bool(proxy_enable),
@@ -94,25 +89,22 @@ class ProxyManager:
                 'override': proxy_override
             }
         except Exception as e:
-            proxy_logger.logger.error(f"读取代理设置失败: {e}")
+            proxy_logger.error(f"读取代理设置失败: {e}")
             return None
     
     @staticmethod
     def _set_windows_proxy_settings(enabled, server = "", override = "<local>"):
         """设置 Windows 代理"""
         try:
-            key = winreg.OpenKey(
+            with winreg.OpenKey(
                     winreg.HKEY_CURRENT_USER,
                     r"Software\Microsoft\Windows\CurrentVersion\Internet Settings",
                     0,
                     winreg.KEY_WRITE
-            )
-            
-            winreg.SetValueEx(key, "ProxyEnable", 0, winreg.REG_DWORD, 1 if enabled else 0)
-            winreg.SetValueEx(key, "ProxyServer", 0, winreg.REG_SZ, server)
-            winreg.SetValueEx(key, "ProxyOverride", 0, winreg.REG_SZ, override)
-            
-            winreg.CloseKey(key)
+            ) as key:
+                winreg.SetValueEx(key, "ProxyEnable", 0, winreg.REG_DWORD, 1 if enabled else 0)
+                winreg.SetValueEx(key, "ProxyServer", 0, winreg.REG_SZ, server)
+                winreg.SetValueEx(key, "ProxyOverride", 0, winreg.REG_SZ, override)
             
             # 通知系统代理设置已更改
             import ctypes
@@ -124,16 +116,16 @@ class ProxyManager:
             
             return True
         except Exception as e:
-            proxy_logger.logger.error(f"设置代理失败: {e}")
+            proxy_logger.error(f"设置代理失败: {e}")
             return False
     
     @staticmethod
-    def _windows_store_has_cert(store_name):
+    def _windows_store_has_cert(store_name, fingerprint):
         """检测指定证书存储是否已有 mitmproxy 证书"""
         try:
             ps_cmd = (
                 f"(Get-ChildItem -Path Cert:\\CurrentUser\\{store_name} "
-                f"| Where-Object {{$_.Subject -like '*mitmproxy*'}} | Measure).Count"
+                f"| Where-Object {{$_.Thumbprint -eq '{fingerprint}'}} | Measure).Count"
             )
             result = subprocess.run(
                     ["powershell", "-NoLogo", "-NoProfile", "-Command", ps_cmd],
@@ -150,11 +142,17 @@ class ProxyManager:
         """自动导入 mitmproxy 证书到 Windows 系统"""
         cert_path = Path.home( ) / ".mitmproxy" / "mitmproxy-ca-cert.cer"
         if not cert_path.exists( ):
-            proxy_logger.logger.warning("未找到 mitmproxy 证书，将在首次运行 mitmdump 时自动生成")
-            return
+            raise RuntimeError("未找到 mitmproxy 证书")
+        try:
+            certificate = cert_path.read_bytes( )
+            if certificate.lstrip( ).startswith(b'-----BEGIN CERTIFICATE-----'):
+                certificate = ssl.PEM_cert_to_DER_cert(certificate.decode('ascii'))
+            fingerprint = hashlib.sha1(certificate).hexdigest( ).upper( )
+        except (OSError, UnicodeError, ValueError) as exc:
+            raise RuntimeError("读取 mitmproxy 证书失败") from exc
         
         for store in ("Root", "CA"):
-            if self._windows_store_has_cert(store):
+            if self._windows_store_has_cert(store, fingerprint):
                 continue
             try:
                 subprocess.run(
@@ -164,15 +162,12 @@ class ProxyManager:
                         stderr = subprocess.STDOUT,
                         timeout = 10
                 )
-                proxy_logger.logger.info(f"已将 mitmproxy 证书导入 CurrentUser\\{store}")
-            except subprocess.CalledProcessError:
-                proxy_logger.logger.warning(
-                        f"导入证书到 {store} 失败，可手动执行：certutil -addstore -f -user {store} \"{cert_path}\"")
-            except Exception as e:
-                proxy_logger.logger.error(f"导入证书时出错: {e}")
+                proxy_logger.info(f"已将 mitmproxy 证书导入 CurrentUser\\{store}")
+            except (OSError, subprocess.SubprocessError) as exc:
+                raise RuntimeError(f'导入 mitmproxy 证书到 {store} 失败，请检查证书和系统权限') from exc
     
     def enable_proxy(self, host = "127.0.0.1", port = 8888):
-        proxy_logger.logger.info("启用系统代理...")
+        proxy_logger.info("启用系统代理...")
         
         if self.os == "Darwin":
             services = self._get_network_services( )
@@ -196,9 +191,6 @@ class ProxyManager:
                 )
         
         elif self.os == "Windows":
-            # 先确保证书已导入
-            self.ensure_windows_mitm_cert( )
-            
             # 保存当前代理设置
             self.original_settings['windows'] = self._get_windows_proxy_settings( )
             if self.original_settings['windows'] is None:
@@ -212,14 +204,14 @@ class ProxyManager:
                     server = proxy_server
             ):
                 raise RuntimeError("无法设置 Windows 系统代理")
-            proxy_logger.logger.info(f"已设置系统代理: {proxy_server}")
+            proxy_logger.info(f"已设置系统代理: {proxy_server}")
         
         elif self.os == "Linux":
             # 进程环境变量不会影响已经运行的微信或其他客户端
-            proxy_logger.logger.info(f"请在目标客户端手动设置代理 {host}:{port}")
+            proxy_logger.info(f"请在目标客户端手动设置代理 {host}:{port}")
     
     def disable_proxy(self):
-        proxy_logger.logger.info("恢复原代理设置...")
+        proxy_logger.info("恢复原代理设置...")
         
         if self.os == "Darwin":
             failures = []
@@ -255,6 +247,6 @@ class ProxyManager:
                 ):
                     raise RuntimeError("恢复 Windows 代理失败")
                 
-                proxy_logger.logger.info("已恢复原始代理设置")
+                proxy_logger.info("已恢复原始代理设置")
         
-        proxy_logger.logger.info("代理已恢复")
+        proxy_logger.info("代理已恢复")

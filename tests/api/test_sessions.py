@@ -1,42 +1,43 @@
-import sys
-import types
 import unittest
 from unittest.mock import patch
 
-from tests import PROJECT_ROOT
-from tests.module_loader import load_module
+from easy_cidaren.api import sessions
 
 
 class SessionTests(unittest.TestCase):
+    def setUp(self):
+        for name in ('query_session', 'answer_session', 'selection_session', 'resource_session'):
+            self.enterContext(patch.object(sessions, name, sessions._UninitializedSession( )))
+        self.addCleanup(self.close_sessions)
+
+    @staticmethod
+    def close_sessions( ):
+        for session in (sessions.query_session, sessions.answer_session,
+                        sessions.selection_session, sessions.resource_session):
+            session.close( )
+
     def test_uninitialized_session_rejects_requests(self):
-        from easy_cidaren.api.sessions import _UninitializedSession
-        
         with self.assertRaisesRegex(RuntimeError, '尚未初始化'):
-            _UninitializedSession( ).get('https://example.invalid', timeout = 1)
+            sessions.query_session.get('https://example.invalid', timeout = 1)
     
-    def test_login_sessions_have_independent_headers(self):
-        requests = types.ModuleType('requests')
-        requests.exceptions = types.SimpleNamespace( )
-        requests.Session = type('Session', (), {})
-        requests.session = lambda: types.SimpleNamespace(headers = {})
-        modules = {
-            'requests': requests,
-            'easy_cidaren.core.public_info': types.SimpleNamespace(
-                    PublicInfo = lambda: types.SimpleNamespace(accept_encoding = 'gzip')),
-            'easy_cidaren.security.signing': types.SimpleNamespace(encrypt_md5 = lambda value: 'signature'),
-        }
-        path = PROJECT_ROOT / 'easy_cidaren' / 'api' / 'sessions.py'
-        with patch.dict(sys.modules, modules):
-            module = load_module('test_sessions_module', path)
-            module.set_token('first')
-            module.rqs_session.headers['extra'] = 'value'
-            self.assertNotIn('extra', module.class_task_request.headers)
-            self.assertNotIn('Usertoken', module.base_headers)
-            self.assertNotIn('Content-Length', module.rqs2_session.headers)
-            module.set_token('second')
-            self.assertEqual(module.class_task_request.headers['Usertoken'], 'second')
-            self.assertNotIn('extra', module.rqs_session.headers)
+    def test_session_headers_are_independent_and_have_explicit_encoding(self):
+        sessions.set_token('first', accept_encoding = 'gzip')
+        sessions.query_session.headers['extra'] = 'value'
+        for session in (sessions.answer_session, sessions.selection_session, sessions.resource_session):
+            self.assertNotIn('extra', session.headers)
+            self.assertEqual(session.headers['Accept-Encoding'], 'gzip')
+        self.assertNotIn('Usertoken', sessions.base_headers)
+        self.assertNotIn('Content-Length', sessions.answer_session.headers)
+        self.assertNotIn('Abc', sessions.resource_session.headers)
+        self.assertNotIn('Authorization-V', sessions.resource_session.headers)
+        self.assertNotEqual(sessions.answer_session.headers['Authorization-V'],
+                            sessions.query_session.headers['Authorization-V'])
 
-
-if __name__ == '__main__':
-    unittest.main( )
+    def test_relogin_closes_previous_connections(self):
+        sessions.set_token('first', accept_encoding = 'gzip')
+        previous = sessions.query_session
+        with patch.object(previous, 'close', wraps = previous.close) as close:
+            sessions.set_token('second', accept_encoding = 'gzip, deflate')
+        close.assert_called_once( )
+        self.assertIsNot(sessions.query_session, previous)
+        self.assertEqual(sessions.query_session.headers['Usertoken'], 'second')

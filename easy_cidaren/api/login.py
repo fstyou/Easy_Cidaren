@@ -2,50 +2,49 @@ import json
 
 from requests import exceptions
 
-import easy_cidaren.api.sessions as requests
-from easy_cidaren.app_logging.config import Log
+from easy_cidaren.api import sessions
+from easy_cidaren.app_logging.config import get_logger
 from easy_cidaren.utils.helpers import create_timestamp
 
 # 基础url
 basic_url = 'https://app.vocabgo.com/student/api/'
 # 初始化log
-login = Log("login")
+login = get_logger("login")
 
 
-def verify_token(token):
-    requests.set_token(token)
+def verify_token(token, *, accept_encoding):
+    sessions.set_token(token, accept_encoding = accept_encoding)
     timestamp = create_timestamp( )
     url = f'Student/Main?timestamp={timestamp}&version=2.6.1.231204&app_type=1'
-    response = None
     try:
-        response = requests.rqs_session.get(basic_url + url, timeout = 15)
-        login.logger.info(f"压缩编码格式：{response.headers.get('Content-Encoding')}")
+        response = sessions.query_session.get(basic_url + url, timeout = 15)
+        login.info(f"压缩编码格式：{response.headers.get('Content-Encoding')}")
         response.raise_for_status( )  # 检查HTTP状态码
         result = response.json( )
         
-        # 判断是否过期 code = 1 为未过期
+        # 登录接口沿用登录失效语义，不套用答题接口的状态码解释。
         if result['code'] != 1:
-            login.logger.error("【token已过期】")
+            login.error("【服务端拒绝登录】: code=%s", result['code'])
             return 1
-        else:
-            return result
+        return result
     except exceptions.HTTPError as e:
-        login.logger.error(f"【HTTP请求错误】: {e}")
+        login.error(f"【HTTP请求错误】: {e}")
         return 2
     except exceptions.Timeout as e:
-        login.logger.error(f"【连接超时，请检查网络连接】: {e}")
+        login.error(f"【连接超时，请检查网络连接】: {e}")
         return 3
     except json.JSONDecodeError as e:
-        login.logger.error(f"【响应内容不是有效的JSON格式】: {e}")
-        if response is not None:
-            login.logger.debug("响应内容：%s", response.text, extra = {'file_only': True})
+        login.error(f"【响应内容不是有效的JSON格式】: {e}")
+        return 4
+    except (KeyError, TypeError) as e:
+        login.error('【登录响应格式错误】: %s', e)
         return 4
     except exceptions.SSLError as e:
-        login.logger.error(f"【SSL错误】：{e}")
+        login.error(f"【SSL错误】：{e}")
         return 5
     except exceptions.ProxyError as e:
-        login.logger.error(f"【代理服务器异常】：{e}")
+        login.error(f"【代理服务器异常】：{e}")
         return 6
     except exceptions.ConnectionError as e:
-        login.logger.error(f"【连接错误】: {e}")
+        login.error(f"【连接错误】: {e}")
         return 7

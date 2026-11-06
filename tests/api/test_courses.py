@@ -1,33 +1,28 @@
-import sys
-import types
 import unittest
+from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
-from tests import PROJECT_ROOT
-from tests.module_loader import load_module
+from easy_cidaren.api import courses
 
 
 class CourseTests(unittest.TestCase):
-    def test_word_query_passes_word_as_parameter(self):
-        import easy_cidaren.api as api_package
-        response = types.SimpleNamespace(json = lambda: {'data': {'word_mean': {'meaning': '<span>test</span>'}}})
-        session = types.SimpleNamespace(get = Mock(return_value = response))
-        sessions = types.ModuleType('easy_cidaren.api.sessions')
-        sessions.rqs_session = session
-        modules = {
-            'easy_cidaren.api.sessions': sessions,
-            'easy_cidaren.api.response': types.SimpleNamespace(handle_response = Mock( )),
-            'easy_cidaren.app_logging.config': types.SimpleNamespace(
-                    Log = lambda name: types.SimpleNamespace(logger = Mock( ))),
-            'easy_cidaren.utils.helpers': types.SimpleNamespace(create_timestamp = lambda: 123),
-        }
-        path = PROJECT_ROOT / 'easy_cidaren' / 'api' / 'courses.py'
-        with patch.dict(sys.modules, modules), patch.object(api_package, 'sessions', sessions, create = True):
-            module = load_module('test_courses_module', path)
-            self.assertEqual(module.use_api_get_prototype('a&b'), 'test')
-            self.assertEqual(session.get.call_args.kwargs['params']['word'], 'a&b')
-            self.assertEqual(session.get.call_args.kwargs['params']['timestamp'], 123)
+    def test_book_download_checks_http_status_before_reading_json(self):
+        response = Mock( )
+        response.raise_for_status.side_effect = OSError('HTTP failure')
+        state = SimpleNamespace(course_id = 'course', get_book_words_data = [])
+        with patch.object(courses.sessions.resource_session, 'get', return_value = response):
+            with self.assertRaisesRegex(OSError, 'HTTP failure'):
+                courses.get_book_all_words(state)
+        response.json.assert_not_called( )
+        self.assertEqual(state.get_book_words_data, [])
 
-
-if __name__ == '__main__':
-    unittest.main( )
+    def test_word_query_passes_word_as_parameter_and_preserves_unicode(self):
+        response = Mock( )
+        with patch.object(courses.sessions.query_session, 'get', return_value = response) as get, \
+                patch('easy_cidaren.api.courses.create_timestamp', return_value = 123):
+            for meaning, expected in [('<span>test</span>', 'test'), (r'<span>测试\u4e2d</span>', '测试中')]:
+                with self.subTest(meaning = meaning):
+                    response.json.return_value = {'code': 1, 'data': {'word_mean': {'meaning': meaning}}}
+                    self.assertEqual(courses.use_api_get_prototype('a&b'), expected)
+                    self.assertEqual(get.call_args.kwargs['params']['word'], 'a&b')
+                    self.assertEqual(get.call_args.kwargs['params']['timestamp'], 123)
