@@ -38,12 +38,12 @@ def set_token(token: str, *, accept_encoding: str):
     for session in (query_session, answer_session, selection_session, resource_session):
         session.close( )
     headers = {**base_headers, 'Accept-Encoding': accept_encoding, 'Usertoken': token}
-
+    
     def create_session(overrides):
         result = requests.Session( )
         result.headers.update({**headers, **overrides})
         return result
-
+    
     query_session = create_session({})
     json_headers = {'Origin': 'https://app.vocabgo.com', 'Content-Type': 'application/json'}
     selection_session = create_session(json_headers)

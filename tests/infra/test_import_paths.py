@@ -29,7 +29,7 @@ class InternalCaptureEntryTests(unittest.TestCase):
                 streams = dict.fromkeys(original) if windowed else original
                 module = ModuleType('mitmproxy.tools.main')
                 calls = []
-
+                
                 def mitmdump( ):
                     calls.append(sys.argv[1:])
                     for name in original:
@@ -42,7 +42,7 @@ class InternalCaptureEntryTests(unittest.TestCase):
                         self.assertEqual(sys.stdin.read( ), '')
                         sys.stdout.write('capture output')
                         sys.stderr.write('capture error')
-
+                
                 module.mitmdump = mitmdump
                 with patch.dict(sys.modules, {'mitmproxy.tools.main': module}), \
                         patch.object(sys, 'argv', ['main.py', '--internal-mitmdump', '--version']), \

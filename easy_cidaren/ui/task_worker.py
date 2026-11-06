@@ -6,7 +6,7 @@ import time
 from PyQt6.QtCore import QThread, pyqtSignal
 
 from easy_cidaren.api.courses import get_all_unit, get_unit_words, get_book_all_words
-from easy_cidaren.api.response import SecurityVerifyError, UnsafeRequestError, WordSelectionRequiredError
+from easy_cidaren.api.response import SecurityVerifyError, UnsafeRequestError
 from easy_cidaren.api.tasks import get_exam, select_all_word, skip_exam
 from easy_cidaren.app_logging.config import get_logger
 from easy_cidaren.core.answers import answer, jump_read, submit
@@ -77,7 +77,7 @@ class TaskWorker(QThread):
                     self.logger.error("任务 %s 无法继续: %s", task_name, e)
                     self.task_error.emit(f"任务 {task_name} 无法继续：{e}")
                     return
-                except (QuestionSkipError, WordSelectionRequiredError) as e:
+                except QuestionSkipError as e:
                     if not self._is_running:
                         return
                     self.logger.error("任务 %s 无法继续: %s", task_name, e)
@@ -220,7 +220,7 @@ class TaskWorker(QThread):
                 read = lambda info: jump_read(info, running = lambda: self._is_running, wait = self._stop_event.wait),
                 skip = skip_exam, progress = self.emit_progress,
                 notice = self.task_notice.emit, logger = self.logger,
-                fatal_errors = (SecurityVerifyError, UnsafeRequestError, WordSelectionRequiredError),
+                fatal_errors = (SecurityVerifyError, UnsafeRequestError),
                 delay = lambda: self._stop_event.wait(
                         random.randint(self.public_info.settings.min_time, self.public_info.settings.max_time)),
         )

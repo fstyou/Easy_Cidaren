@@ -46,6 +46,9 @@ coverage.xml
 !/build/build.py
 !/build/__init__.py
 !/build/windows.iss
+!/build/ChineseSimplified.isl
+!/build/hook-spacy.py
+!/build/hook-mitmproxy.py
 !/build/requirements.txt
 !/build/README.md
 dist/

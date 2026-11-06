@@ -25,11 +25,11 @@ def use_api_get_prototype(word: str) -> str | None:
     
     # 提取并解码数据
     meaning_str: str = prototype.json( )['data']['word_mean']['meaning']
-
+    
     # 只解码残留的 Unicode 转义，保留已经解码的非 ASCII 文本。
     def decode_escape(match: re.Match[str]) -> str:
         return json.loads('"' + match.group( ) + '"')
-
+    
     decoded_meaning = re.sub(r'(?:\\u[0-9a-fA-F]{4})+', decode_escape, meaning_str)
     # 正则匹配
     result = re.findall(r'<span>(.+?)</span>', decoded_meaning)

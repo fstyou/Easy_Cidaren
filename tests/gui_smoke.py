@@ -31,7 +31,7 @@ from easy_cidaren.ui.task_progress import TaskProgress
 class FakeSignal:
     def __init__(self):
         self.connections = []
-
+    
     def connect(self, callback):
         self.connections.append(callback)
 
@@ -43,25 +43,25 @@ class FakeWorker:
         self.started = False
         self.parent = None
         self.stop_requested = False
-
+    
     def setParent(self, parent):
         self.parent = parent
-
+    
     def deleteLater(self):
         pass
-
+    
     def start(self):
         self.started = True
-
+    
     def isRunning(self):
         return self.started
-
+    
     def stop(self):
         self.stop_requested = True
-
+    
     def requestInterruption(self):
         self.stop_requested = True
-
+    
     def wait(self):
         raise AssertionError('The stop action must not block the GUI thread')
 
@@ -89,7 +89,7 @@ def check_dialogs(app: QApplication, theme: ThemeManager):
     message = create_message(None, '提示', '测试内容', QMessageBox.Icon.Information)
     assert message.button(QMessageBox.StandardButton.Ok).text( ) == '知道了'
     assert message.escapeButton( ) == message.button(QMessageBox.StandardButton.Ok)
-
+    
     dark_parent = QWidget( )
     dark_palette = QPalette(dark_parent.palette( ))
     dark_palette.setColor(QPalette.ColorRole.Window, QColor('#202020'))
@@ -101,7 +101,7 @@ def check_dialogs(app: QApplication, theme: ThemeManager):
         dark_message = create_message(dark_parent, '提示', '测试内容', icon)
         assert dark_message.palette( ).color(QPalette.ColorRole.Window).name( ) == '#f4f6f9'
         assert dark_message.palette( ).color(QPalette.ColorRole.WindowText).name( ) == '#263548'
-
+    
     def reject_confirmation(dialog):
         assert dialog.palette( ).color(QPalette.ColorRole.Window).name( ) == '#f4f6f9'
         assert dialog.button(QMessageBox.StandardButton.Yes).text( ) == '中止任务'
@@ -109,19 +109,19 @@ def check_dialogs(app: QApplication, theme: ThemeManager):
         assert dialog.defaultButton( ) == dialog.button(QMessageBox.StandardButton.No)
         assert dialog.escapeButton( ) == dialog.button(QMessageBox.StandardButton.No)
         return QMessageBox.StandardButton.No
-
+    
     with patch.object(QMessageBox, 'exec', new = reject_confirmation):
         assert not confirm_action(None, '确认停止', '确定中止吗？', confirm_text = '中止任务')
-
+    
     original_message_exec = QMessageBox.exec
-
+    
     def close_confirmation(dialog: QMessageBox):
         QTimer.singleShot(0, dialog.close)
         return original_message_exec(dialog)
-
+    
     with patch.object(QMessageBox, 'exec', new = close_confirmation):
         assert not confirm_action(None, '确认开始', '确定开始吗？', confirm_text = '开始', default_confirm = True)
-
+    
     def cancel_file_dialog(dialog):
         assert dialog.palette( ).color(QPalette.ColorRole.Base).lightness( ) > 200
         assert dialog.palette( ).color(QPalette.ColorRole.Text).name( ) == '#263548'
@@ -129,11 +129,11 @@ def check_dialogs(app: QApplication, theme: ThemeManager):
             '保存' if dialog.acceptMode( ) == QFileDialog.AcceptMode.AcceptSave else '打开')
         assert dialog.labelText(QFileDialog.DialogLabel.Reject) == '取消'
         return QFileDialog.DialogCode.Rejected
-
+    
     with patch.object(QFileDialog, 'exec', new = cancel_file_dialog):
         assert select_file(dark_parent, '导出日志', '', '日志文件 (*.log)', save = True) == ''
         assert select_file(dark_parent, '选择音频', '', '音频文件 (*.wav)') == ''
-
+    
     theme.set_mode('dark')
     assert theme.dark
     dark_message = create_message(dark_parent, '提示', '深色测试', QMessageBox.Icon.Warning)
@@ -146,7 +146,7 @@ def check_dialogs(app: QApplication, theme: ThemeManager):
     assert dark_message.palette( ).color(QPalette.ColorRole.Window).name( ) == '#f4f6f9'
     theme.set_mode('dark')
     assert dark_message.palette( ).color(QPalette.ColorRole.Window).name( ) == '#1e2530'
-
+    
     def check_dark_file_dialog(dialog):
         dialog.show( )
         app.processEvents( )
@@ -154,7 +154,7 @@ def check_dialogs(app: QApplication, theme: ThemeManager):
         assert dialog.palette( ).color(QPalette.ColorRole.Text).lightness( ) > 180
         dialog.close( )
         return QFileDialog.DialogCode.Rejected
-
+    
     with patch.object(QFileDialog, 'exec', new = check_dark_file_dialog):
         assert select_file(dark_parent, '打开', '', '所有文件 (*)') == ''
     theme.set_mode('system')
@@ -193,16 +193,32 @@ def create_test_window(app: QApplication) -> UiMainWindow:
 def check_settings_and_about(window: UiMainWindow, app: QApplication, theme: ThemeManager):
     settings_state = SimpleNamespace(settings = Settings(max_time = 3))
     saved_settings = []
-
+    
     def save_settings(**changes):
         replace(settings_state.settings, **changes)
         saved_settings.append(changes)
-
+    
     settings_state.save_settings = save_settings
     with patch.object(window, 'public_info', settings_state):
         window.ui.settings_button.click( )
         assert isinstance(window.settings, SettingsWindow)
         assert window.settings.isVisible( )
+        for mode, background in (('dark', '#273240'), ('light', '#ffffff')):
+            theme.set_mode(mode)
+            app.processEvents( )
+            choice = window.settings.theme_choice
+            image = choice.grab( ).toImage( )
+            pixel = image.pixelColor(image.width( ) // 2, image.height( ) - int(5 * image.devicePixelRatio( )))
+            assert pixel.name( ) == background
+            assert (choice.palette( ).color(QPalette.ColorRole.Text).lightness( ) > 180) == (mode == 'dark')
+            assert (choice.view( ).palette( ).color(QPalette.ColorRole.Base).lightness( ) < 100) == (mode == 'dark')
+            choice.showPopup( )
+            app.processEvents( )
+            popup = choice.view( ).viewport( ).grab( ).toImage( )
+            pixel = popup.pixelColor(popup.width( ) - int(8 * popup.devicePixelRatio( )),
+                                     popup.height( ) - int(8 * popup.devicePixelRatio( )))
+            assert pixel.name( ) == background
+            choice.hidePopup( )
         window.settings.min_time.setValue(5)
         with patch('easy_cidaren.ui.settings.show_warning') as warning:
             window.settings.save( )
@@ -227,7 +243,7 @@ def check_settings_and_about(window: UiMainWindow, app: QApplication, theme: The
         window.ui.help_button.click( )
         assert open_url.call_args.args[0].toString( ) == 'https://github.com/fstyou/Easy_Cidaren#readme'
     print('界面测试：帮助入口完成', flush = True)
-
+    
     def inspect_about(dialog):
         dialog.show( )
         app.processEvents( )
@@ -250,29 +266,29 @@ def check_settings_and_about(window: UiMainWindow, app: QApplication, theme: The
             assert open_project_url.call_args.args[0].toString( ) == 'https://github.com/fstyou/Easy_Cidaren'
         dialog.close( )
         return 0
-
+    
     about_errors = []
-
+    
     def inspect_about_safely(dialog):
         try:
             return inspect_about(dialog)
         except Exception as exc:
             about_errors.append(exc)
             return 0
-
+    
     with patch.object(AboutDialog, 'exec', new = inspect_about_safely):
         window.ui.about_button.click( )
     if about_errors:
         raise about_errors[0]
     print('界面测试：关于窗口内容完成', flush = True)
     original_about_exec = AboutDialog.exec
-
+    
     def close_about(dialog: AboutDialog):
         QTimer.singleShot(0, dialog.close)
         result = original_about_exec(dialog)
         assert not dialog.isVisible( )
         return result
-
+    
     with patch.object(AboutDialog, 'exec', new = close_about):
         window.ui.about_button.click( )
 
@@ -319,20 +335,20 @@ def check_login_and_task_list(window: UiMainWindow, app: QApplication, theme: Th
                 'start_time': 1793604627860, 'over_time': 115172140}
     available = {'task_name': '已开放的任务', 'over_status': 2, 'progress': 0}
     completed = {'task_name': '已完成的任务', 'over_status': 2, 'progress': 100}
-
+    
     def fake_load_tasks(task_type, *, cancelled = lambda: False):
         assert task_type == 1
         assert not cancelled( )
         return [unopened, available, completed]
-
+    
     # The event loop must remain responsive while a list request is pending.
     release_request = threading.Event( )
-
+    
     def delayed_load_tasks(info, *, cancelled):
         if not release_request.wait(2):
             raise TimeoutError('test request was not released')
         return fake_load_tasks(info, cancelled = cancelled)
-
+    
     with patch('easy_cidaren.ui.main_window.load_class_tasks', delayed_load_tasks):
         window.get_task_list( )
         pending_worker = window.task_list_worker
@@ -346,7 +362,7 @@ def check_login_and_task_list(window: UiMainWindow, app: QApplication, theme: Th
         release_request.set( )
         pending_worker.wait( )
         app.processEvents( )
-
+    
     with patch('easy_cidaren.ui.main_window.load_class_tasks', side_effect = OSError('offline')), \
             patch('easy_cidaren.ui.main_window.show_warning') as warning:
         window.get_task_list( )
@@ -356,7 +372,7 @@ def check_login_and_task_list(window: UiMainWindow, app: QApplication, theme: Th
     assert window.public_info.task_list == []
     assert window.ui.task_list.rowCount( ) == 0
     assert window.ui.login.isEnabled( )
-
+    
     with patch('easy_cidaren.ui.main_window.load_class_tasks', fake_load_tasks):
         window.get_task_list( )
         window.task_list_worker.wait( )
@@ -367,11 +383,18 @@ def check_login_and_task_list(window: UiMainWindow, app: QApplication, theme: Th
     completed_radio = window.ui.task_list.cellWidget(2, 0).findChild(QRadioButton)
     assert not unavailable_radio.isEnabled( )
     assert available_radio.isEnabled( )
-    assert not completed_radio.isEnabled( )
+    assert completed_radio.isEnabled( )
     completed_radio.click( )
-    assert not completed_radio.isChecked( )
-    assert not (window.ui.task_list.item(2, 1).flags( ) & Qt.ItemFlag.ItemIsSelectable)
-    assert '已完成' in window.ui.task_list.item(2, 1).toolTip( )
+    assert completed_radio.isChecked( )
+    assert window.ui.task_list.currentItem( ).data(Qt.ItemDataRole.UserRole) == completed
+    assert window.ui.task_list.item(2, 1).flags( ) & Qt.ItemFlag.ItemIsSelectable
+    with patch.object(window, 'confirm_task_start', return_value = True), \
+            patch.object(window, '_start_worker') as start_worker:
+        window.start( )
+        start_worker.assert_called_once_with([completed], batch_mode = False)
+        start_worker.reset_mock( )
+        window.start_batch( )
+        start_worker.assert_called_once_with([available], batch_mode = True)
     for column in range(1, 6):
         assert window.ui.task_list.item(2, column).foreground( ).color( ).name( ) == '#196b4b'
     theme.set_mode('dark')
@@ -394,7 +417,7 @@ def check_login_and_task_list(window: UiMainWindow, app: QApplication, theme: Th
     window.set_ui_enabled(True)
     assert available_radio.isEnabled( )
     assert not unavailable_radio.isEnabled( )
-    assert not completed_radio.isEnabled( )
+    assert completed_radio.isEnabled( )
     assert window.ui.task_list.selectionMode( ) == QAbstractItemView.SelectionMode.SingleSelection
     window.ui.task_list.setRowCount(3)
     assert not (window.ui.task_list.item(0, 1).flags( ) & Qt.ItemFlag.ItemIsSelectable)
@@ -409,6 +432,25 @@ def check_login_and_task_list(window: UiMainWindow, app: QApplication, theme: Th
 
 def check_task_execution(window: UiMainWindow, app: QApplication, available):
     window.task_worker_class = FakeWorker
+    for batch in (False, True):
+        with patch.object(window, 'show_task_progress'), patch.object(window, 'play_music'), \
+                patch('easy_cidaren.ui.main_window.show_information'), patch.object(window, 'get_task_list') as refresh:
+            window._start_worker([available], batch_mode = batch)
+            worker = window.task_worker
+            if batch:
+                window.on_task_finished('单个任务完成')
+                assert not window._task_refresh_timer.isActive( )
+                window.on_batch_finished('一键刷题完成')
+            else:
+                window.on_task_finished('任务完成')
+            refresh.assert_not_called( )
+            window._on_task_worker_finished(worker)
+            assert window._task_refresh_timer.isActive( )
+            assert not window.ui.start_task.isEnabled( )
+            window._task_refresh_timer.stop( )
+            window._task_refresh_timer.timeout.emit( )
+            refresh.assert_called_once( )
+            window.set_ui_enabled(True)
     with patch.object(window, 'show_task_progress'):
         window._start_worker([available], batch_mode = False)
         assert window.task_worker.state is window.public_info
@@ -438,6 +480,11 @@ def check_task_execution(window: UiMainWindow, app: QApplication, available):
             window._on_task_worker_finished(stopping_worker)
             stopped.assert_called_once( )
         assert window.task_worker is None
+        assert window._task_refresh_timer.isActive( )
+        window._task_refresh_timer.stop( )
+        with patch.object(window, 'get_task_list') as refresh:
+            window._task_refresh_timer.timeout.emit( )
+            refresh.assert_called_once( )
     window.set_ui_enabled(True)
     window.set_logged_in(False)
     with patch('easy_cidaren.ui.main_window.show_warning'):
@@ -501,7 +548,7 @@ def check_token_capture(window: UiMainWindow, app: QApplication, theme: ThemeMan
     assert not calls
     window.on_capture_finished( )
     assert calls == ['captured-test-token']
-
+    
     window.show_notice('⚠ <题目错误>')
     window.show_notice('⚠ 已跳过')
     assert '<题目错误>' in window._notice_dialog.text( )
@@ -510,7 +557,7 @@ def check_token_capture(window: UiMainWindow, app: QApplication, theme: ThemeMan
     assert window._notice_dialog.button(QMessageBox.StandardButton.Ok).text( ) == '知道了'
     assert window._notice_dialog.escapeButton( ) == window._notice_dialog.button(QMessageBox.StandardButton.Ok)
     window._notice_dialog.close( )
-
+    
     dialog = CaptureProgressDialog(window)
     dialog.open( )
     app.processEvents( )
@@ -551,7 +598,7 @@ def check_token_capture(window: UiMainWindow, app: QApplication, theme: ThemeMan
     dialog.captured( )
     dialog.finish(success = True)
     assert not dialog.isVisible( )
-
+    
     cancelled = []
     dialog = CaptureProgressDialog(window)
     dialog.cancel_requested.connect(lambda: cancelled.append(True))
@@ -604,18 +651,18 @@ def check_shutdown(app: QApplication):
         information.assert_not_called( )
         error.assert_not_called( )
         warning.assert_called_once_with(window, '退出前请检查代理设置', '请恢复手动代理')
-
+    
     # Real Qt threads must finish without blocking the GUI or starting follow-up requests.
     window = create_test_window(app)
     window.public_info.settings = Settings( )
     entered, release = threading.Event( ), threading.Event( )
-
+    
     def delayed_login(*_args, **_kwargs):
         entered.set( )
         if not release.wait(2):
             raise TimeoutError('test request was not released')
         return {'data': {'user_info': {'student_name': '测试'}}}
-
+    
     with patch('easy_cidaren.ui.main_window.verify_token', delayed_login), \
             patch('easy_cidaren.ui.main_window.load_class_tasks') as load_tasks:
         window.ui.token_input.setText('test-token')
@@ -637,7 +684,7 @@ def check_shutdown(app: QApplication):
         assert not window._logged_in
         assert not window.isVisible( )
         load_tasks.assert_not_called( )
-
+    
     window = create_test_window(app)
     capture = window.capture_dialog = CaptureProgressDialog(window)
     capture.finished.connect(window._on_capture_dialog_closed)

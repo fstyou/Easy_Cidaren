@@ -7,17 +7,26 @@ from easy_cidaren.core.settings import Settings
 
 
 class SettingsTests(unittest.TestCase):
+    def test_completion_sound_is_enabled_by_default_and_saved_choice_is_respected(self):
+        with tempfile.TemporaryDirectory( ) as directory:
+            path = Path(directory) / 'settings.json'
+            self.assertTrue(Settings.load(path).play_music)
+            path.write_text('{}', encoding = 'utf-8')
+            self.assertTrue(Settings.load(path).play_music)
+            Settings(play_music = False).save(path)
+            self.assertFalse(Settings.load(path).play_music)
+    
     def test_brotli_is_the_single_source_for_accept_encoding(self):
         self.assertEqual(Settings( ).accept_encoding, 'gzip, deflate, br')
         self.assertEqual(Settings(br_choices = False).accept_encoding, 'gzip, deflate')
-
+    
     def test_invalid_values_fail_before_tasks_start(self):
         for values in ({'min_time': -1}, {'max_time': True}, {'spend_min_time': '2'},
                        {'spend_max_time': 86401}, {'min_time': 3, 'max_time': 1},
                        {'play_music': 'false'}, {'music_path': None}, {'theme': 'unknown'}):
             with self.subTest(values = values), self.assertRaises(ValueError):
                 Settings(**values)
-
+    
     def test_round_trip_keeps_supported_settings_and_omits_derived_fields(self):
         with tempfile.TemporaryDirectory( ) as directory:
             path = Path(directory) / 'settings.json'
@@ -29,7 +38,7 @@ class SettingsTests(unittest.TestCase):
             settings.save(path)
             self.assertEqual(Settings.load(path), settings)
             self.assertNotIn('accept_encoding', json.loads(path.read_text(encoding = 'utf-8')))
-
+    
     def test_invalid_file_is_not_silently_overwritten(self):
         with tempfile.TemporaryDirectory( ) as directory:
             path = Path(directory) / 'settings.json'

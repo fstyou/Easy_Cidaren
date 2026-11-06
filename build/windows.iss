@@ -29,13 +29,26 @@ Compression=lzma2
 SolidCompression=yes
 SetupIconFile=..\assets\icon.ico
 UninstallDisplayIcon={app}\EasyCidaren.exe
+LanguageDetectionMethod=none
+UsePreviousLanguage=no
+ShowLanguageDialog=yes
+
+[Languages]
+Name: "chinesesimplified"; MessagesFile: "ChineseSimplified.isl"
+Name: "english"; MessagesFile: "compiler:Default.isl"
+
+[CustomMessages]
+chinesesimplified.UninstallShortcut=卸载 %1
+english.UninstallShortcut=Uninstall %1
+chinesesimplified.LaunchApp=运行 %1
+english.LaunchApp=Launch %1
 
 [Files]
 Source: "{#AppSource}\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion
 
 [Icons]
 Name: "{group}\Easy Cidaren"; Filename: "{app}\EasyCidaren.exe"
-Name: "{group}\卸载 Easy Cidaren"; Filename: "{uninstallexe}"
+Name: "{group}\{cm:UninstallShortcut,Easy Cidaren}"; Filename: "{uninstallexe}"
 
 [Run]
-Filename: "{app}\EasyCidaren.exe"; Description: "运行 Easy Cidaren"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\EasyCidaren.exe"; Description: "{cm:LaunchApp,Easy Cidaren}"; Flags: nowait postinstall skipifsilent

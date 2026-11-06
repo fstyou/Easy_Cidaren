@@ -5,9 +5,8 @@ import time
 from requests.exceptions import RequestException
 
 from easy_cidaren.api import sessions
-from easy_cidaren.api.response import (
-    UnknownObfuscationError, UnsafeRequestError, WordSelectionRequiredError, handle_task_response as handle_response,
-)
+from easy_cidaren.api.response import UnknownObfuscationError, UnsafeRequestError, \
+    handle_task_response as handle_response
 from easy_cidaren.app_logging.config import get_logger
 from easy_cidaren.security.decode import debase64, JV_TWO, JV_THREE
 from easy_cidaren.security.signing import encrypt_md5
@@ -17,8 +16,9 @@ from easy_cidaren.utils.helpers import create_timestamp
 api = get_logger('main_api')
 
 basic_url = 'https://app.vocabgo.com/student/api/Student/'
+_FINISHED_MESSAGES = ('任务已完成！', '需要选词！')
 
-def request_with_known_jv(request_func, url, *, retry_unknown = False, **kwargs):
+def request_with_known_jv(request_func, url, *, retry_unknown = False, encoded_data = True, **kwargs):
     """Retry unreadable encoding versions only for explicitly read-only requests."""
     kwargs.setdefault('timeout', 30)
     attempts = 5 if retry_unknown else 1
@@ -30,10 +30,12 @@ def request_with_known_jv(request_func, url, *, retry_unknown = False, **kwargs)
             if retry_unknown:
                 raise
             raise UnsafeRequestError('请求结果不确定，任务已停止；请先在客户端检查任务状态') from exc
+        if not encoded_data:
+            return response
         try:
             payload = response.json( )
             jv = str(payload.get('jv') or '')
-            if not jv or jv == '0' or jv in JV_TWO or jv in JV_THREE:
+            if payload.get('msg') in _FINISHED_MESSAGES or not jv or jv == '0' or jv in JV_TWO or jv in JV_THREE:
                 return response
         except (ValueError, AttributeError) as exc:
             if retry_unknown:
@@ -64,12 +66,10 @@ def _update_exam(public_info, response):
     _handle_changed_response(response)
     try:
         payload = response.json( )
-        if payload.get('msg') == '任务已完成！':
+        if payload.get('msg') in _FINISHED_MESSAGES:
             public_info.exam = 'complete'
-        elif payload.get('msg') == '需要选词！':
-            raise WordSelectionRequiredError('服务端要求先选词，请在客户端完成选词后重试')
         else:
-            exam = debase64(payload['data'], payload['jv'])
+            exam = debase64(payload['data'], payload.get('jv'))
             if not isinstance(exam, dict) or not exam.get('topic_code'):
                 raise ValueError('题目缺少有效的题目编号')
             public_info.exam = exam
@@ -116,7 +116,8 @@ def select_all_word(word_info, task_id) -> None:
     data = {"task_id": task_id, "word_map": word_info, "chose_err_item": 2,
             "timestamp": timestamp, "version": "2.6.1.231204", "sign": sign,
             "app_type": 1}
-    rsp = request_with_known_jv(sessions.selection_session.post, basic_url + url, data = json.dumps(data))
+    rsp = request_with_known_jv(sessions.selection_session.post, basic_url + url,
+                                encoded_data = False, data = json.dumps(data))
     # 检查请求是否成功
     _handle_changed_response(rsp)
 
@@ -205,7 +206,7 @@ def query_word(public_info, word):
     handle_response(response)
     public_info.word_query_result = debase64(
             response.json( )['data'],
-            response.json( )['jv']
+            response.json( ).get('jv')
     )
     api.debug("查询单词成功")
 
@@ -227,7 +228,7 @@ def submit_result(public_info, option):
     _handle_changed_response(rsp)
     try:
         payload = rsp.json( )
-        result = debase64(payload['data'], payload['jv'])
+        result = debase64(payload['data'], payload.get('jv'))
         if not isinstance(result, dict):
             raise ValueError('答题结果必须是对象')
     except (KeyError, TypeError, ValueError, AttributeError) as exc:

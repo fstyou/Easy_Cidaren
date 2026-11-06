@@ -16,7 +16,7 @@ class WordListTests(unittest.TestCase):
             {'word': 'three', 'list_id': 'unit-a'},
         ]})
         self.assertEqual(word_list.query_word_unit(info), {'course:unit-a': ['one', 'three'], 'course:unit-b': ['two']})
-
+    
     def test_word_pool_is_written_to_data_directory(self):
         with tempfile.TemporaryDirectory( ) as directory:
             data_dir = Path(directory)
@@ -44,7 +44,7 @@ class WordListTests(unittest.TestCase):
                 info = SimpleNamespace(get_word_list_result = result)
                 with self.assertRaisesRegex(ValueError, '有效词表'):
                     word_list.decode_word_result(info)
-
+    
     def test_invalid_entry_does_not_poison_current_or_persisted_vocabulary(self):
         for invalid in ({'word': 42, 'word_zh': '无效'}, None):
             with self.subTest(entry = invalid):
@@ -58,7 +58,7 @@ class WordListTests(unittest.TestCase):
                     write.assert_not_called( )
                 self.assertEqual(info.word_list, ['existing'])
                 self.assertEqual(info.word_dict, {'原有': 'existing'})
-
+    
     def test_missing_meaning_does_not_block_using_words(self):
         info = SimpleNamespace(
                 word_dict = {}, settings = Settings( ),

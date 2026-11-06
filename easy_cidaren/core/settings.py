@@ -14,12 +14,12 @@ class Settings:
     spend_min_time: int = 2
     spend_max_time: int = 10
     br_choices: bool = True
-    play_music: bool = False
+    play_music: bool = True
     music_path: str = ''
     theme: str = 'system'
     self_learn_lib: bool = True
     self_learn_pool: bool = True
-
+    
     def __post_init__(self):
         for name in ('min_time', 'max_time', 'spend_min_time', 'spend_max_time'):
             value = getattr(self, name)
@@ -34,11 +34,11 @@ class Settings:
             raise ValueError('提示音路径必须是字符串')
         if self.theme not in ('system', 'light', 'dark'):
             raise ValueError('外观必须是 system、light 或 dark')
-
+    
     @property
     def accept_encoding(self) -> str:
         return 'gzip, deflate, br' if self.br_choices else 'gzip, deflate'
-
+    
     @classmethod
     def load(cls, path: Path):
         try:
@@ -51,7 +51,7 @@ class Settings:
         if not isinstance(data, dict):
             raise ValueError(f'设置文件必须包含 JSON 对象：{path}')
         return cls(**{field.name: data[field.name] for field in fields(cls) if field.name in data})
-
+    
     def save(self, path: Path):
         path.parent.mkdir(parents = True, exist_ok = True)
         write_json(path, asdict(self), indent = 2)

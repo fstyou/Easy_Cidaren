@@ -43,6 +43,9 @@ class UiMainWindow(QMainWindow):
         self._capture_warnings = []
         self._screen_signal_connected = False
         self._minimum_height_check_pending = False
+        self._task_refresh_timer = QtCore.QTimer(self)
+        self._task_refresh_timer.setSingleShot(True)
+        self._task_refresh_timer.timeout.connect(lambda: self.get_task_list( ))
         self.ui = MainWindowUi(self)
         theme = manager( )
         if theme:
@@ -336,7 +339,7 @@ class UiMainWindow(QMainWindow):
                     cell.setFlags(cell.flags( ) & ~QtCore.Qt.ItemFlag.ItemIsSelectable)
                 self.ui.task_list.setItem(row, col, cell)
         self._refresh_task_colors( )
-
+    
     def _refresh_task_colors(self):
         theme = manager( )
         dark = bool(theme and theme.dark)
@@ -407,6 +410,7 @@ class UiMainWindow(QMainWindow):
     def _start_worker(self, tasks, *, batch_mode):
         if self._closing or self.task_worker is not None:
             return
+        self._task_refresh_timer.stop( )
         self._task_stopping = False
         self.public_info.is_self_built = False
         self.public_info.right_count = 0
@@ -435,14 +439,19 @@ class UiMainWindow(QMainWindow):
             if self._closing:
                 self._close_when_idle( )
                 return
-            self.set_ui_enabled(True)
             if self._task_stopping:
                 self._task_stopping = False
                 self._batch_mode = False
                 self._hide_task_progress( )
                 self.main_logger.info('任务已手动停止')
                 show_information(self, '任务停止', '任务已停止')
-
+            # 等工作线程退出及服务端状态更新后再刷新，期间禁止再次启动。
+            self.set_ui_enabled(False)
+            self.ui.stop_task.setEnabled(False)
+            self.ui.warn_info.setText('正在刷新任务…')
+            self.ui.warn_info.show( )
+            self._task_refresh_timer.start(1000)
+    
     def start(self):
         try:
             current_item = self.ui.task_list.currentItem( )
@@ -517,8 +526,6 @@ class UiMainWindow(QMainWindow):
         self._hide_task_progress( )
         self.play_music( )
         show_information(self, "任务完成", message)
-        # 自动刷新任务列表，显示最新进度和得分
-        QtCore.QTimer.singleShot(1000, self.get_task_list)
     
     def on_batch_finished(self, summary):
         """
@@ -533,8 +540,6 @@ class UiMainWindow(QMainWindow):
         self.main_logger.info(summary)
         self.play_music( )
         show_information(self, "一键刷题完成", summary)
-        # 等服务端进度落库后再刷新
-        QtCore.QTimer.singleShot(1000, self.get_task_list)
     
     def on_task_notice(self, message):
         """
@@ -656,7 +661,7 @@ class UiMainWindow(QMainWindow):
             dialog.deleteLater( )
         if self._capture_warnings and not self._closing:
             QtCore.QTimer.singleShot(0, self._show_capture_warnings)
-
+    
     def _show_capture_warnings(self):
         if not self._capture_warnings or (self._closing and self._has_background_work( )):
             return
@@ -727,11 +732,11 @@ class UiMainWindow(QMainWindow):
         # Keep workers alive until their queued finished callbacks have run.
         return any(worker is not None for worker in (
             self.login_worker, self.task_list_worker, self.capture_worker, self.task_worker))
-
+    
     def _close_when_idle(self):
         if self._closing and not self._has_background_work( ):
             QtCore.QTimer.singleShot(0, self.close)
-
+    
     def closeEvent(self, a0):
         if a0 is None:
             return

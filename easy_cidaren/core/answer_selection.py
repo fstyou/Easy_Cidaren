@@ -1,6 +1,7 @@
 import random
 import re
 
+from easy_cidaren.api.response import CardDataError
 from easy_cidaren.api.tasks import query_word
 from easy_cidaren.app_logging.config import get_logger
 from easy_cidaren.utils.word_revert import word_revert
@@ -29,6 +30,16 @@ def source_options(public_info) -> list:
 
 def _without_whitespace(text):
     return ''.join(text.split( ))
+
+
+def _same_meaning_clauses(left, right):
+    """Allow reordered semicolon-separated meanings without reordering characters."""
+    
+    def clauses(text):
+        return sorted(part for part in re.split(r'[;；]', _without_whitespace(text)) if part)
+    
+    left_parts = clauses(left)
+    return len(left_parts) > 1 and left_parts == clauses(right)
 
 
 def filler_option(public_info) -> list:
@@ -60,6 +71,9 @@ def select_mean(public_info) -> int:
                 index = original.index(option)
                 select_module.debug(f"匹配第{index + 1}个选项[{option}]")
                 return index
+    matches = [option for option in options if any(_same_meaning_clauses(option, mean) for mean in means)]
+    if len(matches) == 1:
+        return original.index(matches[0])
     # 匹配失败 随机提交一个
     select_module.warning("匹配失败，随机提交")
     return random.randint(0, len(options) - 1)
@@ -68,14 +82,29 @@ def select_mean(public_info) -> int:
 # select match word
 def select_match_word(public_info, word_mean) -> int:
     options = filler_option(public_info)
+    reordered_matches = []
+    card_error = None
+    queried = False
     for word in options:
         # query word mean
-        query_word(public_info, word)
+        try:
+            query_word(public_info, word)
+        except CardDataError as exc:
+            card_error = exc
+            select_module.warning('单词卡片不可用，继续检查其他候选项：%s', word)
+            continue
+        queried = True
         handle_query_word_mean(public_info)
         # is match word mean
         for mean in public_info.word_means:
             if _without_whitespace(word_mean) == _without_whitespace(mean):
                 return source_options(public_info).index(word)
+        if any(_same_meaning_clauses(word_mean, mean) for mean in public_info.word_means):
+            reordered_matches.append(word)
+    if len(reordered_matches) == 1:
+        return source_options(public_info).index(reordered_matches[0])
+    if not queried and card_error is not None:
+        raise card_error
     if not options:
         raise ValueError('题目没有可选答案')
     index = min(2, len(options) - 1)
@@ -115,20 +144,15 @@ def word_examples(public_info, options) -> str:
     for word in options:
         if is_word_exist(public_info, word):
             if public_info.word_query_result.get('means'):
-                query_result = public_info.word_query_result['means']
-                for means in query_result:
-                    for examples in means['usages']:
-                        for sentences in examples['examples']:
-                            # match same mean
-                            if sentences["sen_mean_cn"] == exam_zh:
-                                # answer
-                                return re.findall(r'{(.+?)}', sentences['sen_content'])[0]
+                groups = (usage['examples'] for meaning in public_info.word_query_result['means']
+                          for usage in meaning['usages'])
             else:
-                query_result = public_info.word_query_result['options']
-                for contents in query_result:
-                    for example in contents['content']['example']:
-                        if example["sen_mean_cn"] == exam_zh:
-                            # answer
-                            return re.findall(r'{(.+?)}', example['sen_content'])[0]
+                groups = (option['content']['example'] for option in public_info.word_query_result['options'])
+            for examples in groups:
+                for example in examples:
+                    if example['sen_mean_cn'] == exam_zh:
+                        match = re.search(r'{(.+?)}', example['sen_content'])
+                        if match:
+                            return match.group(1)
     
     return ''

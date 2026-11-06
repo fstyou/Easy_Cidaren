@@ -29,7 +29,7 @@ def themed_style(style, dark):
     if not dark:
         return style
     style = re.sub(r'(background(?:-color)?\s*:\s*)white\b', r'\1#273240', style, flags = re.I)
-
+    
     def replace(match):
         color = match.group(0)
         # White foreground is used on blue buttons and selected rows.
@@ -37,7 +37,7 @@ def themed_style(style, dark):
         if color.lower( ) == '#ffffff' and re.search(r'(?<!background-)color\s*:\s*$', prefix):
             return color
         return _DARK_COLORS.get(color.lower( ), color)
-
+    
     return re.sub(r'#[0-9a-fA-F]{6}\b', replace, style)
 
 
@@ -64,7 +64,7 @@ def themed_palette(base, dark):
 
 class ThemeManager(QtCore.QObject):
     changed = QtCore.pyqtSignal(bool)
-
+    
     def __init__(self, app, mode = 'system'):
         super( ).__init__(app)
         self.app = app
@@ -76,15 +76,15 @@ class ThemeManager(QtCore.QObject):
         hints = app.styleHints( )
         hints.colorSchemeChanged.connect(self._system_changed)
         self.apply( )
-
+    
     def _system_changed(self, *_args):
         if self.mode == 'system':
             self.apply( )
-
+    
     def set_mode(self, mode):
         self.mode = mode if mode in ('system', 'light', 'dark') else 'system'
         self.apply( )
-
+    
     def apply(self):
         scheme = self.app.styleHints( ).colorScheme( )
         system_dark = (scheme == QtCore.Qt.ColorScheme.Dark or
@@ -102,7 +102,7 @@ class ThemeManager(QtCore.QObject):
         finally:
             self._updating = False
         self.changed.emit(self.dark)
-
+    
     def _style_widget(self, widget):
         style = widget.styleSheet( )
         previous = widget.property('_theme_applied')
@@ -114,7 +114,7 @@ class ThemeManager(QtCore.QObject):
         widget.setProperty('_theme_applied', themed)
         if style != themed:
             widget.setStyleSheet(themed)
-
+    
     def eventFilter(self, a0: QtCore.QObject | None, a1: QtCore.QEvent | None) -> bool:
         if (not self._updating and a1 is not None
                 and a1.type( ) in (QtCore.QEvent.Type.Show, QtCore.QEvent.Type.StyleChange)

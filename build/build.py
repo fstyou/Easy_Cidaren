@@ -60,8 +60,10 @@ def bundle( ):
     BUILD.mkdir(parents = True, exist_ok = True)
     command = [sys.executable, '-m', 'PyInstaller', '--noconfirm', '--clean', '--windowed',
                '--name', NAME, '--distpath', BUNDLE, '--workpath', BUILD / 'work',
-               '--specpath', BUILD, '--paths', ROOT, '--collect-all', 'spacy',
-               '--collect-all', 'mitmproxy', '--collect-all', 'mitmproxy_rs',
+               '--specpath', BUILD, '--paths', ROOT, '--additional-hooks-dir', ROOT / 'build',
+               '--exclude-module', 'spacy.tests', '--exclude-module', 'mitmproxy.test',
+               '--exclude-module', 'mitmproxy.tools.web', '--exclude-module', 'mitmproxy.tools.console',
+               '--collect-all', 'mitmproxy_rs',
                '--hidden-import', 'mitmproxy.tools.main',
                '--add-data', f'{ROOT / "assets"}{os.pathsep}assets',
                '--add-data', f'{ROOT / "data"}{os.pathsep}data',

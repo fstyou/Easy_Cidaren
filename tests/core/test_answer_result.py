@@ -36,7 +36,7 @@ class AnswerResultTests(unittest.TestCase):
                                         'topic_code': 'next'})
             add.assert_not_called( )
         self.assertEqual((info.right_count, info.wrong_count, info.topic_code), (0, 1, 'next'))
-
+    
     def test_unusable_learning_data_does_not_stop_recording_result(self):
         for corrects in (1, True, {'unexpected': 'value'}):
             with self.subTest(corrects = corrects):
@@ -48,7 +48,7 @@ class AnswerResultTests(unittest.TestCase):
                                                 'topic_code': 'next'})
                     save.assert_not_called( )
                 self.assertEqual((info.right_count, info.wrong_count, info.topic_code), (1, 0, 'next'))
-
+    
     def test_invalid_topic_code_is_rejected_before_changing_local_state(self):
         info = SimpleNamespace(right_count = 0, wrong_count = 0, topic_code = 'old', settings = Settings( ),
                                exam = {'topic_mode': 32, 'stem': {'remark': '含义'}})

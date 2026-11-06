@@ -25,14 +25,14 @@ class PublicInfoTests(unittest.TestCase):
                 info.save_settings(theme = 'light')
         self.assertEqual(info.settings, saved)
         self.assertEqual(Settings.load(self.root / 'runtime' / 'settings.json'), saved)
-
+    
     def test_defaults_do_not_require_a_configuration_file(self):
         info = public_info.PublicInfo( )
         self.assertEqual(info.settings, Settings( ))
         self.assertFalse((self.root / 'runtime' / 'settings.json').exists( ))
         self.assertEqual(info.task_list, [])
         self.assertEqual(info.version, '1.0.0')
-
+    
     def test_word_pool_is_validated_at_startup(self):
         pool = self.root / 'word_pool.json'
         pool.write_text(json.dumps({'含义': 'word'}), encoding = 'utf-8')

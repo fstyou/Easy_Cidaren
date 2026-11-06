@@ -20,9 +20,14 @@ class SettingsWindow(QtWidgets.QDialog):
             QGroupBox { background: white; border: 1px solid #dce3ec; border-radius: 8px;
                         margin-top: 12px; padding: 16px 12px 12px; font-weight: 600; }
             QGroupBox::title { subcontrol-origin: margin; left: 12px; padding: 0 4px; }
-            QSpinBox, QLineEdit { background: white; color: #263548; border: 1px solid #cfd9e5;
-                                  border-radius: 5px; padding: 5px; font-size: 13px; }
+            QSpinBox, QLineEdit, QComboBox { background: white; color: #263548; border: 1px solid #cfd9e5;
+                                            border-radius: 5px; padding: 5px; font-size: 13px; }
             QSpinBox { padding-right: 30px; }
+            QComboBox { padding-right: 30px; }
+            QComboBox::drop-down { subcontrol-origin: border; subcontrol-position: top right;
+                                   width: 25px; border: 0; border-left: 1px solid #d4deea; }
+            QComboBox QAbstractItemView { background: white; color: #263548; border: 1px solid #cfd9e5;
+                                          selection-background-color: #3269bd; selection-color: white; }
             QSpinBox::up-button, QSpinBox::down-button {
                 subcontrol-origin: border; width: 25px; height: 14px;
                 background: #edf2f7; border: 0; border-left: 1px solid #d4deea;
@@ -31,7 +36,8 @@ class SettingsWindow(QtWidgets.QDialog):
             QSpinBox::down-button { subcontrol-position: bottom right; border-bottom-right-radius: 5px; }
             QSpinBox::up-button:hover, QSpinBox::down-button:hover { background: #dce8f5; }
             QSpinBox::up-button:pressed, QSpinBox::down-button:pressed { background: #cbdcf0; }
-        ''' + '\nQSpinBox::up-arrow { image: url("' + (ASSETS_DIR / 'spin_up.svg').as_posix( ) + '"); }'
+        ''' + '\nQComboBox::down-arrow { image: url("' + (ASSETS_DIR / 'spin_down.svg').as_posix( ) + '"); }'
+                           + '\nQSpinBox::up-arrow { image: url("' + (ASSETS_DIR / 'spin_up.svg').as_posix( ) + '"); }'
                            + '\nQSpinBox::down-arrow { image: url("' + (
                                    ASSETS_DIR / 'spin_down.svg').as_posix( ) + '"); }')
         layout = QtWidgets.QVBoxLayout(self)

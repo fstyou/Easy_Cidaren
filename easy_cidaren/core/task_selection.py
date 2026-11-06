@@ -54,10 +54,8 @@ def unavailable_reason(task):
         return '任务已过期，无法执行'
     if task.get('over_status') == 1:
         return '任务尚未开始，请在开始时间后再试'
-    if task.get('progress', 0) >= 100:
-        return '已完成的任务不能重新执行'
     return None
 
 
 def batch_tasks(tasks):
-    return [task for task in tasks if not unavailable_reason(task)]
+    return [task for task in tasks if not unavailable_reason(task) and task.get('progress', 0) < 100]

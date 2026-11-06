@@ -21,10 +21,6 @@ class UnknownObfuscationError(UnsafeRequestError):
     """The response uses an unknown obfuscation version."""
 
 
-class WordSelectionRequiredError(Exception):
-    """The service requires words to be selected before answering can continue."""
-
-
 def handle_response(response, *, task = False):
     response.raise_for_status( )
     data = response.json( )

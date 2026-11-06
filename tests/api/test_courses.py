@@ -15,7 +15,7 @@ class CourseTests(unittest.TestCase):
                 courses.get_book_all_words(state)
         response.json.assert_not_called( )
         self.assertEqual(state.get_book_words_data, [])
-
+    
     def test_word_query_passes_word_as_parameter_and_preserves_unicode(self):
         response = Mock( )
         with patch.object(courses.sessions.query_session, 'get', return_value = response) as get, \

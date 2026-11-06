@@ -25,7 +25,7 @@ class BuildTests(unittest.TestCase):
                 )
                 self.assertEqual(result.returncode, expected_code)
                 self.assertIn(expected_text, result.stdout + result.stderr)
-
+    
     def test_installer_uses_python_architecture(self):
         for python_platform, arch, inno_arch in (
                 ('win-amd64', 'x64', 'x64compatible'),
@@ -42,7 +42,7 @@ class BuildTests(unittest.TestCase):
                 command = run.call_args.args[0]
                 self.assertIn(f'/DInnoArch={inno_arch}', command)
                 self.assertIn(f'/DOutputName=easy-cidaren_{build.VERSION}_windows_{arch}', command)
-
+    
     def test_publish_preserves_other_files_and_replaces_existing_target(self):
         with tempfile.TemporaryDirectory( ) as temp:
             root = Path(temp)
@@ -60,7 +60,7 @@ class BuildTests(unittest.TestCase):
                 build.publish(source, target)
             self.assertEqual(existing.read_bytes( ), b'unchanged')
             self.assertEqual(target.read_bytes( ), b'updated')
-
+    
     def test_failed_publish_keeps_existing_artifact(self):
         with tempfile.TemporaryDirectory( ) as temp:
             root = Path(temp)
@@ -69,7 +69,7 @@ class BuildTests(unittest.TestCase):
             with patch.object(build, 'DIST', root), self.assertRaises(FileNotFoundError):
                 build.publish(root / 'missing.deb', target)
             self.assertEqual(target.read_bytes( ), b'previous')
-
+    
     def test_linux_build_produces_only_deb_and_rpm_for_each_architecture(self):
         for arch, deb_arch, rpm_arch in (('x64', 'amd64', 'x86_64'), ('arm64', 'arm64', 'aarch64')):
             with self.subTest(arch = arch), tempfile.TemporaryDirectory( ) as temp:
@@ -82,12 +82,12 @@ class BuildTests(unittest.TestCase):
                 existing = output / 'existing.exe'
                 existing.write_bytes(b'unchanged')
                 commands = []
-
+                
                 def create_package(command):
                     commands.append(command)
                     package = Path(command[command.index('-p') + 1])
                     package.write_bytes(b'package')
-
+                
                 with patch.object(build, 'BUILD', root / 'temp'), \
                         patch.object(build, 'DIST', output), patch.object(build, 'BUNDLE', bundle), \
                         patch.object(build, 'PACKAGES', root / 'temp' / 'packages'), \
@@ -102,12 +102,12 @@ class BuildTests(unittest.TestCase):
                 })
                 self.assertEqual([path.read_bytes( ) for path in packages], [b'package', b'package'])
                 self.assertEqual(existing.read_bytes( ), b'unchanged')
-
+    
     def test_unsupported_python_architecture_is_rejected(self):
         with patch.object(build.sysconfig, 'get_platform', return_value = 'win32'):
             with self.assertRaisesRegex(RuntimeError, 'win32'):
                 build.windows( )
-
+    
     def test_temporary_files_removed_only_after_success(self):
         for failure in (False, True):
             with self.subTest(failure = failure), tempfile.TemporaryDirectory( ) as temp:

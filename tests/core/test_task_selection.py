@@ -11,7 +11,7 @@ class TaskSelectionTests(unittest.TestCase):
         with patch('easy_cidaren.core.task_selection.get_class_task', side_effect = [first_page, OSError('offline')]):
             with self.assertRaises(OSError):
                 load_class_tasks(1)
-
+    
     def test_pages_are_filtered_by_task_type_and_expiry(self):
         learning = {'task_type': 1, 'over_status': 2}
         testing = {'task_type': 2, 'over_status': 2}
@@ -21,19 +21,19 @@ class TaskSelectionTests(unittest.TestCase):
         with patch('easy_cidaren.core.task_selection.get_class_task', side_effect = pages) as request:
             self.assertEqual(load_class_tasks(1), [learning, learning])
         self.assertEqual([call.args for call in request.call_args_list], [(1,), (2,)])
-
+    
     def test_empty_page_with_more_results_is_rejected(self):
         with patch('easy_cidaren.core.task_selection.get_class_task', return_value = {'records': [], 'total': 30}):
             with self.assertRaisesRegex(ValueError, '分页数据不完整'):
                 load_class_tasks(1)
-
+    
     def test_cancellation_discards_partial_results_and_stops_paging(self):
         cancelled = [False]
-
+        
         def first_page(_page):
             cancelled[0] = True
             return {'records': [{'over_status': 2, 'task_type': 1}], 'total': 20}
-
+        
         with patch('easy_cidaren.core.task_selection.get_class_task', side_effect = first_page) as request:
             self.assertEqual(load_class_tasks(1, cancelled = lambda: cancelled[0]), [])
             request.assert_called_once_with(1)
@@ -57,10 +57,10 @@ class TaskSelectionTests(unittest.TestCase):
     def test_open_task_with_zero_progress_is_available(self):
         self.assertIsNone(unavailable_reason({'over_status': 2, 'progress': 0}))
     
-    def test_completed_tasks_cannot_be_retried(self):
+    def test_completed_tasks_can_be_started_individually(self):
         for task_type in (1, 2):
             task = {'over_status': 2, 'progress': 100, 'task_type': task_type}
-            self.assertIn('已完成', unavailable_reason(task))
+            self.assertIsNone(unavailable_reason(task))
     
     def test_batch_skips_unopened_and_completed_tasks(self):
         tasks = [

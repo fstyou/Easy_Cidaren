@@ -26,7 +26,7 @@ class PlatformCompatibilityTests(unittest.TestCase):
                     else:
                         self.assertFalse(ProxyManager._set_windows_proxy_settings(True))
                 key.__exit__.assert_called_once( )
-
+    
     def test_windows_certificate_checks_exact_certificate_and_reports_import_errors(self):
         manager = ProxyManager( )
         with tempfile.TemporaryDirectory( ) as directory:
@@ -41,7 +41,7 @@ class PlatformCompatibilityTests(unittest.TestCase):
                 with self.assertRaisesRegex(RuntimeError, '导入 mitmproxy 证书'):
                     manager.ensure_windows_mitm_cert( )
                 has_cert.assert_called_once_with('Root', fingerprint)
-
+    
     def test_macos_proxy_is_not_changed_when_original_settings_cannot_be_restored(self):
         manager = ProxyManager( )
         manager.os = 'Darwin'
@@ -58,7 +58,7 @@ class PlatformCompatibilityTests(unittest.TestCase):
                     manager.enable_proxy( )
                 run.assert_not_called( )
                 self.assertEqual(manager.original_settings, {})
-
+    
     def test_macos_proxy_settings_include_enabled_and_disabled_states(self):
         enabled = 'Enabled: Yes\nServer: proxy.example\nPort: 8080\nAuthenticated Proxy Enabled: 0\n'
         disabled = 'Enabled: No\nServer: \nPort: 0\nAuthenticated Proxy Enabled: 0\n'
@@ -67,7 +67,7 @@ class PlatformCompatibilityTests(unittest.TestCase):
             settings = ProxyManager._get_proxy_info('Wi-Fi')
         self.assertEqual(settings, {'web_enabled': True, 'web_host': 'proxy.example', 'web_port': '8080',
                                     'secure_enabled': False, 'secure_host': '', 'secure_port': '0'})
-
+    
     def test_macos_authentication_marker_does_not_block_capture_or_restore(self):
         for authentication in ('', 'Authenticated Proxy Enabled: 0\n', 'Authenticated Proxy Enabled: 1\n'):
             with self.subTest(authentication = authentication):
@@ -86,7 +86,7 @@ class PlatformCompatibilityTests(unittest.TestCase):
                     ['networksetup', '-setwebproxy', 'Wi-Fi', '127.0.0.1', '7890'],
                     ['networksetup', '-setsecurewebproxy', 'Wi-Fi', '127.0.0.1', '7890'],
                 ])
-
+    
     def test_linux_capture_cleanup_emits_typed_restore_notice(self):
         from easy_cidaren.token_capture.service import CaptureStatus, TokenCaptureService
         service = TokenCaptureService('unused')
@@ -98,7 +98,7 @@ class PlatformCompatibilityTests(unittest.TestCase):
         callback.assert_called_once( )
         self.assertIs(callback.call_args.args[0], CaptureStatus.RESTORE_PROXY)
         self.assertTrue(callback.call_args.args[1])
-
+    
     def test_capture_cleanup_does_not_restore_proxy_before_it_was_touched(self):
         from easy_cidaren.token_capture.service import TokenCaptureService
         service = TokenCaptureService('unused')
@@ -107,7 +107,7 @@ class PlatformCompatibilityTests(unittest.TestCase):
         service.cleanup(callback)
         service.proxy_manager.disable_proxy.assert_not_called( )
         callback.assert_not_called( )
-
+    
     def test_certificate_startup_failure_is_reported(self):
         from easy_cidaren.token_capture.service import TokenCaptureService
         with tempfile.TemporaryDirectory( ) as directory:
@@ -137,7 +137,7 @@ class PlatformCompatibilityTests(unittest.TestCase):
                 service._ensure_mitm_cert_ready(callback)
                 self.assertEqual(callback.call_args.args[0], capture_service.CaptureStatus.CERT_TRUST)
                 self.assertIn('手动信任', callback.call_args.args[1])
-
+    
     def test_answer_library_does_not_depend_on_working_directory(self):
         from easy_cidaren.paths import DATA_DIR
         with tempfile.TemporaryDirectory( ) as directory:

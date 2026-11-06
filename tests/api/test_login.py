@@ -14,7 +14,7 @@ class LoginErrorTests(unittest.TestCase):
                 with self.subTest(data = data):
                     session.get.return_value.json.return_value = data
                     self.assertEqual(verify_token('test', accept_encoding = 'gzip'), 4)
-
+    
     def test_login_rejection_preserves_token_refresh_flow(self):
         response = Mock( )
         response.json.return_value = {'code': 11003}
@@ -22,7 +22,7 @@ class LoginErrorTests(unittest.TestCase):
                 patch('easy_cidaren.api.login.sessions.query_session') as session:
             session.get.return_value = response
             self.assertEqual(verify_token('test', accept_encoding = 'gzip'), 1)
-
+    
     def test_network_errors_return_the_expected_status(self):
         cases = [(exceptions.Timeout, 3), (exceptions.SSLError, 5),
                  (exceptions.ProxyError, 6), (exceptions.ConnectionError, 7)]

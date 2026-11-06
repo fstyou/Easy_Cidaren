@@ -13,7 +13,7 @@ class AnswerLibraryTests(unittest.TestCase):
         self.root = Path(directory)
         self.enterContext(patch.object(library, 'DATA_DIR', self.root))
         self.enterContext(patch.object(library, '_lib', None))
-
+    
     def test_phrase_and_word_answers_share_storage_without_mixing(self):
         library.add_answer('含义', ['a phrase'])
         library.add_answer('含义', ['a phrase'])
@@ -25,7 +25,7 @@ class AnswerLibraryTests(unittest.TestCase):
         saved = json.loads((self.root / 'answer_lib.json').read_text(encoding = 'utf-8'))
         self.assertEqual(saved['含义'], ['a phrase'])
         self.assertEqual(saved['_word_answers']['含义'], ['word'])
-
+    
     def test_failed_save_does_not_change_cached_answers(self):
         with patch('easy_cidaren.core.answer_library.write_json', side_effect = OSError('failed')):
             library.add_answer('新含义', ['new answer'])
@@ -33,7 +33,7 @@ class AnswerLibraryTests(unittest.TestCase):
         library.add_answer('新含义', ['new answer'])
         saved = json.loads((self.root / 'answer_lib.json').read_text(encoding = 'utf-8'))
         self.assertEqual(saved['新含义'], ['new answer'])
-
+    
     def test_invalid_library_is_not_used_or_overwritten(self):
         path = self.root / 'answer_lib.json'
         for invalid in ([], None, {'含义': 'whole phrase'}, {'含义': [1]},
@@ -47,7 +47,7 @@ class AnswerLibraryTests(unittest.TestCase):
                 library.add_word_answer('含义', ['new word'])
                 self.assertIsNone(library._lib)
                 self.assertEqual(path.read_text(encoding = 'utf-8'), original)
-
+    
     def test_unreadable_library_has_actionable_error(self):
         path = self.root / 'answer_lib.json'
         for content in (b'{invalid json', b'\xff'):
@@ -64,7 +64,7 @@ class AnswerLibraryTests(unittest.TestCase):
             with patch.object(library, '_save_lib') as save:
                 library.add_answer('含义', ['new answer'])
                 save.assert_not_called( )
-
+    
     def test_valid_existing_answers_are_preserved_when_learning(self):
         path = self.root / 'answer_lib.json'
         path.write_text(json.dumps({'含义': ['old phrase'], '_word_answers': {'含义': ['word']}}),

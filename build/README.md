@@ -10,12 +10,15 @@ python -m pip install -r build/requirements.txt
 
 从项目根目录执行对应命令：
 
-- Windows：安装 Inno Setup 6，并将 `ISCC.exe` 加入 PATH；运行 `python build/build.py windows`。
+- Windows：安装 Inno Setup 6.5 或更新版本，并将 `ISCC.exe` 加入 PATH；运行 `python build/build.py windows`。
 - macOS：运行 `python build/build.py macos`。
 - Linux：安装 Ruby、`fpm`、`dpkg-deb` 和 `rpmbuild`，运行 `python build/build.py linux`。
 
 打包好的安装包位于 `build/output/`。  
 打包时产生的临时文件位于 `build/temp/`，打包成功后会自动删除，失败时会保留以便排查。
+
+打包时排除 spaCy 测试、开发源码及重复的 Python 源文件，以及本软件不使用的 mitmproxy 独立网页和终端界面；保留语言模型和
+mitmdump 抓包功能。
 
 Linux 安装包目前没有声明系统图形库等运行时依赖，需自行提供兼容的 Qt 图形运行环境。  
 构建时使用的系统库版本也会限制可运行的发行版。

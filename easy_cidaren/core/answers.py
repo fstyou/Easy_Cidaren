@@ -396,13 +396,15 @@ def _match_tips_words(tips, word_lens, words, strict_len = True, exclude = None)
         for w in words:
             if w.lower( ) in exclude:
                 continue
-            if not strict_len or wlen is None or wlen == 0:
+            if not w.lower( ).startswith(tip.lower( )):
+                continue
+            if not strict_len or not wlen:
                 length_matches = True
             elif isinstance(wlen, (int, str)):
                 length_matches = len(w) == int(wlen)
             else:
                 raise ValueError('题目中的单词长度无效')
-            if w.lower( ).startswith(tip.lower( )) and length_matches:
+            if length_matches:
                 matched = w
                 break
         if matched is None:

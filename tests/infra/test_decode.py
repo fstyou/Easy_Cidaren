@@ -19,7 +19,7 @@ class DecodeTests(unittest.TestCase):
     def test_unknown_encoding_is_not_guessed(self):
         with self.assertRaisesRegex(ValueError, '不支持的数据编码版本'):
             debase64('x', '2_unknown')
-
+    
     def test_recovers_shuffled_chunks_including_the_remainder(self):
         original = {'word': 'test'}
         payload = base64.b64encode(json.dumps(original).encode( )).decode( )
