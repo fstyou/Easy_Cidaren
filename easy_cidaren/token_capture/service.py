@@ -3,11 +3,13 @@ import os
 import socket
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 from enum import Enum, auto
 from pathlib import Path
 
+from easy_cidaren.api.login import verify_capture_token
 from easy_cidaren.app_logging.config import get_logger
 from easy_cidaren.token_capture.proxy_manager import ProxyManager
 from easy_cidaren.token_capture.token_store import SAVED_TOKEN_FILE
@@ -18,6 +20,7 @@ class CaptureStatus(Enum):
     MANUAL_PROXY = auto( )
     CERT_TRUST = auto( )
     WAITING = auto( )
+    VERIFYING = auto( )
     RESTORE_PROXY = auto( )
     WARNING = auto( )
 
@@ -25,7 +28,7 @@ class CaptureStatus(Enum):
 class TokenCaptureService:
     """Token 捕获服务"""
     
-    def __init__(self, capture_directory):
+    def __init__(self, capture_directory, accept_encoding = 'gzip, deflate'):
         """
         初始化 Token 捕获服务
         
@@ -33,6 +36,7 @@ class TokenCaptureService:
             capture_directory: Token 捕获数据目录
         """
         self.capture_directory = capture_directory
+        self.accept_encoding = accept_encoding
         self.mitm_process = None
         self.proxy_manager = None
         self._proxy_attempted = False
@@ -58,6 +62,7 @@ class TokenCaptureService:
         self._is_running = True
         service_logger.info("开始 token 捕获流程")
         
+        candidate_directory = None
         try:
             self.proxy_manager = ProxyManager( )
             
@@ -73,12 +78,12 @@ class TokenCaptureService:
                 return None
             
             Path(self.capture_directory).mkdir(parents = True, exist_ok = True)
-            token_file = Path(self.capture_directory) / SAVED_TOKEN_FILE
-            try:
-                stat = token_file.stat( )
-                previous_version = (stat.st_ino, stat.st_mtime_ns, stat.st_size)
-            except FileNotFoundError:
-                previous_version = None
+            candidate_directory = tempfile.TemporaryDirectory(prefix = '.capture-', dir = self.capture_directory)
+            token_file = Path(candidate_directory.name) / 'candidate.txt'
+            previous_version = None
+            rejected_tokens = set( )
+            pending_token = None
+            retry_at = 0
             
             # 启用代理
             service_logger.info("正在启用系统代理 127.0.0.1:8888")
@@ -149,17 +154,37 @@ class TokenCaptureService:
                         try:
                             with open(token_file, encoding = 'utf-8') as f:
                                 token = f.read( ).strip( )
-                                if token:
-                                    service_logger.info("成功捕获到 UserToken")
-                                    if token_callback:
-                                        token_callback(token)
-                                    return token
+                                if token and token not in rejected_tokens and token != pending_token:
+                                    pending_token = token
+                                    retry_at = 0
                         except Exception as e:
                             service_logger.error(f"读取 token 文件失败: {e}")
                             if error_callback:
                                 error_callback(f"读取 token 文件失败: {e}")
                             return None
                 
+                if pending_token and time.monotonic( ) >= retry_at:
+                    if status_callback:
+                        status_callback(CaptureStatus.VERIFYING, '正在验证 Token…')
+                    result = verify_capture_token(pending_token, accept_encoding = self.accept_encoding)
+                    if self._stop_requested.is_set( ):
+                        return None
+                    if isinstance(result, dict):
+                        saved = Path(candidate_directory.name) / 'verified.txt'
+                        saved.write_text(pending_token, encoding = 'utf-8')
+                        os.replace(saved, Path(self.capture_directory) / SAVED_TOKEN_FILE)
+                        if token_callback:
+                            token_callback(pending_token)
+                        return pending_token
+                    if result == 1:
+                        rejected_tokens.add(pending_token)
+                        pending_token = None
+                        if status_callback:
+                            status_callback(CaptureStatus.WAITING, 'Token 无效，正在等待有效 Token…')
+                    else:
+                        retry_at = time.monotonic( ) + 5
+                        if status_callback:
+                            status_callback(CaptureStatus.WAITING, '验证失败，请检查网络，正在重试…')
                 self._stop_requested.wait(0.5)
         
         except Exception as e:
@@ -169,6 +194,8 @@ class TokenCaptureService:
             return None
         finally:
             self.cleanup(status_callback)
+            if candidate_directory:
+                candidate_directory.cleanup( )
     
     @staticmethod
     def _is_port_in_use(port):

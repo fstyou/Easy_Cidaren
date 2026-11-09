@@ -209,14 +209,14 @@ class PlatformCompatibilityTests(unittest.TestCase):
             def launch(args, **kwargs):
                 popen_args.update(args = args, **kwargs)
                 self.assertEqual((capture_dir / 'last_token.txt').read_text(encoding = 'utf-8'), previous_token)
-                new_file = capture_dir / 'new-token'
+                new_file = Path(kwargs['env']['EASY_CIDAREN_TOKEN_FILE'])
                 new_file.write_text('test-token', encoding = 'utf-8')
-                os.replace(new_file, capture_dir / 'last_token.txt')
                 return FakeProcess( )
             
             with patch('easy_cidaren.token_capture.service.find_mitmdump', return_value = 'mitmdump'), \
                     patch.object(service, '_is_port_in_use', return_value = False), \
                     patch.object(service, '_ensure_mitm_cert_ready'), \
+                    patch('easy_cidaren.token_capture.service.verify_capture_token', return_value = {'code': 1}), \
                     patch.object(capture_service.subprocess, 'Popen', side_effect = launch):
                 self.assertEqual(service.start_capture( ), 'test-token')
                 previous_token = 'test-token'
@@ -224,8 +224,7 @@ class PlatformCompatibilityTests(unittest.TestCase):
                 with patch.object(service, '_is_port_in_use', return_value = False), \
                         patch.object(service, '_ensure_mitm_cert_ready'):
                     self.assertEqual(service.start_capture( ), 'test-token')
-            self.assertEqual(popen_args['env']['EASY_CIDAREN_TOKEN_FILE'],
-                             str((capture_dir / 'last_token.txt').resolve( )))
+            self.assertFalse(Path(popen_args['env']['EASY_CIDAREN_TOKEN_FILE']).exists( ))
             self.assertEqual(Path(popen_args['args'][2]), path.parent / 'addon.py')
             host_index = popen_args['args'].index('--listen-host')
             self.assertEqual(popen_args['args'][host_index + 1], '127.0.0.1')
@@ -239,6 +238,44 @@ class PlatformCompatibilityTests(unittest.TestCase):
                     patch.object(capture_service.subprocess, 'Popen', return_value = stopped_process):
                 self.assertIsNone(service.start_capture( ))
             self.assertEqual((capture_dir / 'last_token.txt').read_text(encoding = 'utf-8'), 'test-token')
+
+    def test_capture_waits_for_valid_token_and_preserves_saved_value(self):
+        from unittest.mock import Mock
+        with tempfile.TemporaryDirectory( ) as directory, \
+                patch('easy_cidaren.token_capture.service.ProxyManager'), \
+                patch('easy_cidaren.token_capture.service.find_mitmdump', return_value = 'mitmdump'):
+            saved = Path(directory) / 'last_token.txt'
+            saved.write_text('saved', encoding = 'utf-8')
+            service = capture_service.TokenCaptureService(directory)
+            process = Mock( )
+            process.poll.return_value = None
+            candidate = None
+            statuses = []
+
+            def launch(args, **kwargs):
+                nonlocal candidate
+                candidate = Path(kwargs['env']['EASY_CIDAREN_TOKEN_FILE'])
+                candidate.write_text('expired', encoding = 'utf-8')
+                return process
+
+            def verify(token, **kwargs):
+                self.assertEqual(saved.read_text(encoding = 'utf-8'), 'saved')
+                if token == 'expired':
+                    replacement = candidate.with_name('replacement')
+                    replacement.write_text('valid', encoding = 'utf-8')
+                    os.replace(replacement, candidate)
+                    return 1
+                return {'code': 1}
+
+            with patch.object(service, '_is_port_in_use', return_value = False), \
+                    patch.object(service, '_ensure_mitm_cert_ready'), \
+                    patch.object(capture_service.subprocess, 'Popen', side_effect = launch), \
+                    patch('easy_cidaren.token_capture.service.verify_capture_token', side_effect = verify) as validator:
+                self.assertEqual(service.start_capture(status_callback = lambda s, m: statuses.append(m)), 'valid')
+            self.assertEqual(validator.call_count, 2)
+            self.assertTrue(any('等待有效' in message for message in statuses))
+            self.assertEqual(saved.read_text(encoding = 'utf-8'), 'valid')
+            self.assertEqual(sorted(p.name for p in Path(directory).iterdir( )), ['last_token.txt'])
 
 
 if __name__ == "__main__":

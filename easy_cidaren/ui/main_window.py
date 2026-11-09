@@ -404,7 +404,7 @@ class UiMainWindow(QMainWindow):
     def confirm_task_start(self, details):
         return confirm_action(
                 self, "确认开始", details, confirm_text = "开始", default_confirm = True,
-                detail = "运行期间请保持程序打开",
+                detail = "\n运行期间请保持程序打开。\n执行任务期间请勿在任何设备打开词达人。",
         )
     
     def _start_worker(self, tasks, *, batch_mode):
@@ -466,7 +466,7 @@ class UiMainWindow(QMainWindow):
                     show_warning(self, "无法开始任务", reason)
                     return
                 task_name = task_info['task_name']
-                if self.confirm_task_start(f"开始以下任务？\n\n{task_name}"):
+                if self.confirm_task_start(f"开始以下任务？\n{task_name}"):
                     self._start_worker([task_info], batch_mode = False)
             else:
                 show_information(self, "无法开始任务", "请先登录并选择要执行的任务")
@@ -634,7 +634,7 @@ class UiMainWindow(QMainWindow):
         self.capture_dialog = CaptureProgressDialog(self)
         self.capture_dialog.cancel_requested.connect(self.toggle_token_capture)
         self.capture_dialog.finished.connect(self._on_capture_dialog_closed)
-        self.capture_worker = TokenCaptureWorker(path)
+        self.capture_worker = TokenCaptureWorker(path, self.public_info.settings.accept_encoding)
         self.capture_worker.status_update.connect(self.on_capture_status)
         self.capture_worker.error_occurred.connect(self.on_capture_error)
         self.capture_worker.token_captured.connect(self.on_builtin_token_captured)

@@ -3,10 +3,22 @@ from unittest.mock import Mock, patch
 
 from requests import exceptions
 
-from easy_cidaren.api.login import verify_token
+from easy_cidaren.api.login import verify_capture_token, verify_token
 
 
 class LoginErrorTests(unittest.TestCase):
+    def test_capture_verification_uses_a_separate_direct_session(self):
+        session = Mock( )
+        session.headers = {}
+        session.get.return_value.json.return_value = {'code': 1}
+        with patch('easy_cidaren.api.login.requests.Session') as factory, \
+                patch('easy_cidaren.api.login.sessions.set_token') as set_token:
+            factory.return_value.__enter__.return_value = session
+            self.assertEqual(verify_capture_token('candidate', accept_encoding = 'gzip'), {'code': 1})
+        self.assertFalse(session.trust_env)
+        self.assertEqual(session.headers['Usertoken'], 'candidate')
+        set_token.assert_not_called( )
+
     def test_incomplete_login_response_is_reported_as_a_format_error(self):
         with patch('easy_cidaren.api.login.sessions.set_token'), \
                 patch('easy_cidaren.api.login.sessions.query_session') as session:

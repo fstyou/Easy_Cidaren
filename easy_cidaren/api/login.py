@@ -1,5 +1,6 @@
 import json
 
+import requests
 from requests import exceptions
 
 from easy_cidaren.api import sessions
@@ -14,10 +15,22 @@ login = get_logger("login")
 
 def verify_token(token, *, accept_encoding):
     sessions.set_token(token, accept_encoding = accept_encoding)
+    return _verify_session(sessions.query_session)
+
+
+def verify_capture_token(token, *, accept_encoding):
+    """Verify a candidate without changing application sessions or using the capture proxy."""
+    with requests.Session( ) as session:
+        session.trust_env = False
+        session.headers.update({**sessions.base_headers, 'Accept-Encoding': accept_encoding, 'Usertoken': token})
+        return _verify_session(session)
+
+
+def _verify_session(session):
     timestamp = create_timestamp( )
     url = f'Student/Main?timestamp={timestamp}&version=2.6.1.231204&app_type=1'
     try:
-        response = sessions.query_session.get(basic_url + url, timeout = 15)
+        response = session.get(basic_url + url, timeout = 15)
         login.info(f"压缩编码格式：{response.headers.get('Content-Encoding')}")
         response.raise_for_status( )  # 检查HTTP状态码
         result = response.json( )

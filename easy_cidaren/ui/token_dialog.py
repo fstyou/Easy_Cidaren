@@ -16,9 +16,9 @@ class TokenCaptureWorker(QThread):
     status_update = pyqtSignal(object, str)  # 状态类型与展示文案
     error_occurred = pyqtSignal(str)  # 错误信号
     
-    def __init__(self, capture_directory):
+    def __init__(self, capture_directory, accept_encoding = 'gzip, deflate'):
         super( ).__init__( )
-        self.service = TokenCaptureService(capture_directory)
+        self.service = TokenCaptureService(capture_directory, accept_encoding)
     
     def run(self):
         """在线程中执行 token 捕获"""
@@ -151,8 +151,9 @@ class CaptureProgressDialog(QDialog):
         ) + '</ol>')
     
     def show_status(self, status, message):
-        if status is CaptureStatus.WAITING:
-            self.status_label.setText("等待获取 Token…")
+        if status in (CaptureStatus.WAITING, CaptureStatus.VERIFYING):
+            self.status_label.setText(message)
+            QtCore.QTimer.singleShot(0, self._fit_content)
         elif status is CaptureStatus.MANUAL_PROXY:
             self._setup_steps[0] = message
             self._render_steps( )
