@@ -18,7 +18,7 @@ class LoginErrorTests(unittest.TestCase):
         self.assertFalse(session.trust_env)
         self.assertEqual(session.headers['Usertoken'], 'candidate')
         set_token.assert_not_called( )
-
+    
     def test_incomplete_login_response_is_reported_as_a_format_error(self):
         with patch('easy_cidaren.api.login.sessions.set_token'), \
                 patch('easy_cidaren.api.login.sessions.query_session') as session:

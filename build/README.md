@@ -1,14 +1,30 @@
-# 本机打包
+# 打包
 
-使用 Python 3.12 建立虚拟环境。  
-先安装项目依赖，再安装打包依赖：
+需要 Python 3.12。  
+请从项目根目录执行该文档中的命令。
 
-```bash
-python -m pip install -r requirements.txt
-python -m pip install -r build/requirements.txt
+## 安装依赖并打包
+
+克隆仓库后，在项目根目录创建虚拟环境并安装项目和打包依赖。  
+Windows PowerShell 中使用以下命令创建并激活虚拟环境：
+
+```powershell
+py -3.12 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+pip install -r build/requirements.txt
 ```
 
-从项目根目录执行对应命令：
+macOS 和 Linux 中使用以下命令创建并激活虚拟环境：
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+pip install -r build/requirements.txt
+```
+
+执行以下操作开始打包：
 
 - Windows：安装 Inno Setup 6.5 或更新版本，并将 `ISCC.exe` 加入 PATH；运行 `python build/build.py windows`。
 - macOS：运行 `python build/build.py macos`。
@@ -16,9 +32,6 @@ python -m pip install -r build/requirements.txt
 
 打包好的安装包位于 `build/output/`。  
 打包时产生的临时文件位于 `build/temp/`，打包成功后会自动删除，失败时会保留以便排查。
-
-打包时排除 spaCy 测试、开发源码及重复的 Python 源文件，以及本软件不使用的 mitmproxy 独立网页和终端界面；保留语言模型和
-mitmdump 抓包功能。
 
 Linux 安装包目前没有声明系统图形库等运行时依赖，需自行提供兼容的 Qt 图形运行环境。  
 构建时使用的系统库版本也会限制可运行的发行版。

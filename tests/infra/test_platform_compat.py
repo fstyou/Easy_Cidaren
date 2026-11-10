@@ -238,7 +238,7 @@ class PlatformCompatibilityTests(unittest.TestCase):
                     patch.object(capture_service.subprocess, 'Popen', return_value = stopped_process):
                 self.assertIsNone(service.start_capture( ))
             self.assertEqual((capture_dir / 'last_token.txt').read_text(encoding = 'utf-8'), 'test-token')
-
+    
     def test_capture_waits_for_valid_token_and_preserves_saved_value(self):
         from unittest.mock import Mock
         with tempfile.TemporaryDirectory( ) as directory, \
@@ -251,13 +251,13 @@ class PlatformCompatibilityTests(unittest.TestCase):
             process.poll.return_value = None
             candidate = None
             statuses = []
-
+            
             def launch(args, **kwargs):
                 nonlocal candidate
                 candidate = Path(kwargs['env']['EASY_CIDAREN_TOKEN_FILE'])
                 candidate.write_text('expired', encoding = 'utf-8')
                 return process
-
+            
             def verify(token, **kwargs):
                 self.assertEqual(saved.read_text(encoding = 'utf-8'), 'saved')
                 if token == 'expired':
@@ -266,7 +266,7 @@ class PlatformCompatibilityTests(unittest.TestCase):
                     os.replace(replacement, candidate)
                     return 1
                 return {'code': 1}
-
+            
             with patch.object(service, '_is_port_in_use', return_value = False), \
                     patch.object(service, '_ensure_mitm_cert_ready'), \
                     patch.object(capture_service.subprocess, 'Popen', side_effect = launch), \

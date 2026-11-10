@@ -237,7 +237,7 @@ class TokenCaptureService:
         elif sys.platform != "win32":
             service_logger.info("非 Windows 系统，请手动信任 mitmproxy 证书")
             if status_callback:
-                status_callback(CaptureStatus.CERT_TRUST, f"在客户端信任 mitmproxy 证书：{cert_path}")
+                status_callback(CaptureStatus.CERT_TRUST, f"在此电脑上手动信任 mitmproxy 证书：{cert_path}")
     
     def cleanup(self, status_callback = None):
         """清理资源（线程安全，可重复调用，只执行一次）"""

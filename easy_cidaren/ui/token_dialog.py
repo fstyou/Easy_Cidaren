@@ -140,7 +140,7 @@ class CaptureProgressDialog(QDialog):
         self.setFixedHeight(height)
     
     def _render_steps(self):
-        steps = ["打开电脑微信并登录"]
+        steps = ["打开此电脑上的微信并登录"]
         steps.extend(self._setup_steps[key] for key in sorted(self._setup_steps))
         steps.extend([
             "在微信中进入“词达人”公众号的学生端，或在任意聊天发送并打开 https://app.vocabgo.com/student/",

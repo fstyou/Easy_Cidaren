@@ -585,7 +585,9 @@ def check_token_capture(window: UiMainWindow, app: QApplication, theme: ThemeMan
     assert steps.index('127.0.0.1:8888') < steps.index(cert_path) < steps.index('公众号')
     assert not hasattr(dialog, 'details')
     dialog.show_status(CaptureStatus.WAITING, '任意等待提示')
-    assert '等待获取' in dialog.status_label.text( )
+    assert dialog.status_label.text( ) == '任意等待提示'
+    dialog.show_status(CaptureStatus.VERIFYING, '正在验证 Token…')
+    assert dialog.status_label.text( ) == '正在验证 Token…'
     theme.set_mode('dark')
     dialog.failed('测试错误')
     assert '#ff9d98' in dialog.status_label.styleSheet( )
