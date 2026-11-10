@@ -242,7 +242,7 @@ def check_settings_and_about(window: UiMainWindow, app: QApplication, theme: The
     print('界面测试：日志导出入口完成', flush = True)
     with patch('easy_cidaren.ui.main_window.QtGui.QDesktopServices.openUrl', return_value = True) as open_url:
         window.ui.help_button.click( )
-        assert open_url.call_args.args[0].toString( ) == 'https://github.com/fstyou/Easy_Cidaren#readme'
+        assert open_url.call_args.args[0].toString( ) == 'https://github.com/fstyou/Easy_Cidaren#快速上手'
     print('界面测试：帮助入口完成', flush = True)
     
     def inspect_about(dialog):

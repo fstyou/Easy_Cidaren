@@ -566,7 +566,7 @@ class UiMainWindow(QMainWindow):
         show_error(self, "任务停止", error_message)
     
     def open_readme(self):
-        url = QtCore.QUrl("https://github.com/fstyou/Easy_Cidaren#readme")
+        url = QtCore.QUrl("https://github.com/fstyou/Easy_Cidaren#快速上手")
         if not QtGui.QDesktopServices.openUrl(url):
             show_warning(self, "无法打开帮助", "无法打开浏览器，请检查系统默认浏览器设置")
     
